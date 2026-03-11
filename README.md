@@ -26,6 +26,16 @@ This is not a generic hosting panel clone. `SHP` is a focused multi-tenant contr
 
 `SHP` is the authoritative source of truth for platform desired state.
 
+## Bootstrap
+
+This repository is bootstrapped as a `pnpm` workspace with a shared TypeScript base config.
+
+Useful commands:
+
+- `./scripts/bootstrap.sh`
+- `pnpm build`
+- `pnpm typecheck`
+
 ## Source of truth
 
 Recommended product database:
@@ -195,9 +205,9 @@ Recommended phases:
 - store secrets as references in the data model and materialize them only when needed
 - every meaningful control-plane action should generate an audit event
 
-## Planned repository layout
+## Repository layout
 
-Planned structure:
+Current scaffold:
 
 - `apps/api`: public and internal HTTP API
 - `apps/web`: operator and tenant web UI

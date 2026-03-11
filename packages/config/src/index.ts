@@ -1,0 +1,73 @@
+export interface PanelListenerConfig {
+  host: string;
+  port: number;
+}
+
+export interface PanelWorkerConfig {
+  pollIntervalMs: number;
+  logLevel: "debug" | "info" | "warn" | "error";
+}
+
+export interface PanelDatabaseRuntimeConfig {
+  url: string;
+}
+
+export interface PanelRuntimeConfig {
+  env: string;
+  version: string;
+  api: PanelListenerConfig;
+  web: PanelListenerConfig;
+  worker: PanelWorkerConfig;
+  database: PanelDatabaseRuntimeConfig;
+}
+
+function readString(value: string | undefined, fallback: string): string {
+  return value && value.trim().length > 0 ? value.trim() : fallback;
+}
+
+function readPort(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+
+  if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535) {
+    return fallback;
+  }
+
+  return parsed;
+}
+
+function readPositiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return parsed;
+}
+
+export function createPanelRuntimeConfig(
+  env: NodeJS.ProcessEnv = process.env
+): PanelRuntimeConfig {
+  return {
+    env: readString(env.NODE_ENV, "development"),
+    version: readString(env.SHP_VERSION, "0.1.0"),
+    api: {
+      host: readString(env.SHP_API_HOST, "127.0.0.1"),
+      port: readPort(env.SHP_API_PORT, 3000)
+    },
+    web: {
+      host: readString(env.SHP_WEB_HOST, "127.0.0.1"),
+      port: readPort(env.SHP_WEB_PORT, 3100)
+    },
+    worker: {
+      pollIntervalMs: readPositiveInt(env.SHP_WORKER_POLL_INTERVAL_MS, 5000),
+      logLevel: readString(env.SHP_LOG_LEVEL, "info") as PanelWorkerConfig["logLevel"]
+    },
+    database: {
+      url: readString(
+        env.SHP_DATABASE_URL,
+        "postgresql://simplehost:simplehost@127.0.0.1:5432/simplehost_panel"
+      )
+    }
+  };
+}

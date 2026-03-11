@@ -1,0 +1,22 @@
+{
+  "name": "@simplehost/panel-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@simplehost/panel-config": "workspace:*",
+    "@simplehost/panel-contracts": "workspace:*",
+    "@simplehost/panel-ui": "workspace:*"
+  }
+}

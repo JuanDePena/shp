@@ -35,12 +35,38 @@ Useful commands:
 - `./scripts/bootstrap.sh`
 - `pnpm build`
 - `pnpm typecheck`
+- `pnpm start:api`
+- `pnpm start:worker`
+
+## Current bootstrap endpoints
+
+The current API bootstrap now exposes a minimal control-plane loop for `SHM`:
+
+- `GET /healthz`
+- `GET /v1/meta`
+- `GET /v1/control-plane/state`
+- `POST /v1/nodes/register`
+- `POST /v1/jobs/claim`
+- `POST /v1/jobs/report`
+
+Current behavior:
+
+- the API persists nodes, jobs, and reported results in PostgreSQL
+- the API auto-creates the current bootstrap control-plane schema on startup
+- each newly registered node gets a small bootstrap queue
+- pending and reported job state is visible through `/v1/control-plane/state`
 
 ## Source of truth
 
 Recommended product database:
 
 - `PostgreSQL`
+
+Current control-plane cluster expectation:
+
+- dedicated `postgresql-shp` cluster
+- default local listener `127.0.0.1:5433`
+- default database `simplehost_panel`
 
 Use the `SHP` database for:
 
@@ -156,6 +182,14 @@ Recommended lifecycle:
 
 `SHP` plans and authorizes work. `SHM` performs local execution.
 
+Current bootstrap implementation:
+
+1. `SHM` registers itself through `/v1/nodes/register`.
+2. `SHM` claims pending jobs through `/v1/jobs/claim`.
+3. `SHM` executes allowlisted jobs locally.
+4. `SHM` reports results through `/v1/jobs/report`.
+5. `SHP` keeps node state, pending jobs, and reported results in PostgreSQL.
+
 ## API surface
 
 Recommended first API groups:
@@ -223,6 +257,6 @@ Current scaffold:
 
 - [`/opt/simplehost/AGENTS.md`](/opt/simplehost/AGENTS.md)
 - [`/opt/simplehost/repos/simplehost-manager/README.md`](/opt/simplehost/repos/simplehost-manager/README.md)
-- [`/opt/simplehost/repos/simplehost-platform-config/runbooks/ARQUITECTURE.md`](/opt/simplehost/repos/simplehost-platform-config/runbooks/ARQUITECTURE.md)
-- [`/opt/simplehost/repos/simplehost-platform-config/runbooks/MULTI_DOMAIN.md`](/opt/simplehost/repos/simplehost-platform-config/runbooks/MULTI_DOMAIN.md)
-- [`/opt/simplehost/repos/simplehost-platform-config/runbooks/REPO_LAYOUT.md`](/opt/simplehost/repos/simplehost-platform-config/runbooks/REPO_LAYOUT.md)
+- [`/opt/simplehost/repos/simplehost-platform-config/docs/ARQUITECTURE.md`](/opt/simplehost/repos/simplehost-platform-config/docs/ARQUITECTURE.md)
+- [`/opt/simplehost/repos/simplehost-platform-config/docs/MULTI_DOMAIN.md`](/opt/simplehost/repos/simplehost-platform-config/docs/MULTI_DOMAIN.md)
+- [`/opt/simplehost/repos/simplehost-platform-config/docs/REPO_LAYOUT.md`](/opt/simplehost/repos/simplehost-platform-config/docs/REPO_LAYOUT.md)

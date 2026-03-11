@@ -66,7 +66,7 @@ export function createPanelRuntimeConfig(
     database: {
       url: readString(
         env.SHP_DATABASE_URL,
-        "postgresql://simplehost:simplehost@127.0.0.1:5432/simplehost_panel"
+        "postgresql://simplehost_panel:change-me@127.0.0.1:5433/simplehost_panel"
       )
     }
   };

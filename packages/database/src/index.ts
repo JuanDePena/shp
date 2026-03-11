@@ -44,3 +44,5 @@ export function createPanelDatabaseHealthSummary(url: string): Record<string, un
     database: settings.database
   };
 }
+
+export { createPostgresControlPlaneStore, type PanelControlPlaneStore } from "./control-plane-store.js";

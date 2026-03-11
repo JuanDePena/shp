@@ -12,6 +12,9 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@simplehost/panel-contracts": "workspace:*",
+    "pg": "^8.16.3"
   }
 }
-

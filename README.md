@@ -246,12 +246,19 @@ Current scaffold:
 - `apps/api`: public and internal HTTP API
 - `apps/web`: operator and tenant web UI
 - `apps/worker`: background jobs, planners, and async control-plane tasks
+- `packaging/env`: environment file examples for packaged installs
+- `packaging/systemd`: `systemd` units for packaged installs
 - `packages/config`: runtime config loading and validation
 - `packages/contracts`: shared schemas and API contracts
 - `packages/database`: ORM, migrations, seed data, and persistence helpers
 - `packages/testing`: test fixtures and shared test helpers
 - `packages/ui`: shared UI components
 - `docs`
+
+Current packaged service artifacts:
+
+- [`/opt/simplehost/repos/simplehost-panel/packaging/systemd/spanel-api.service`](/opt/simplehost/repos/simplehost-panel/packaging/systemd/spanel-api.service)
+- [`/opt/simplehost/repos/simplehost-panel/packaging/env/spanel-api.env.example`](/opt/simplehost/repos/simplehost-panel/packaging/env/spanel-api.env.example)
 
 ## References
 

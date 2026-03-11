@@ -1,0 +1,20 @@
+[Unit]
+Description=SimpleHost Panel Worker
+After=network-online.target postgresql@shp.service
+Wants=network-online.target
+Requires=postgresql@shp.service
+
+[Service]
+Type=simple
+User=spanel
+Group=spanel
+WorkingDirectory=/opt/simplehost/repos/simplehost-panel
+EnvironmentFile=/etc/spanel/worker.env
+ExecStart=/usr/bin/node /opt/simplehost/repos/simplehost-panel/apps/worker/dist/index.js
+Restart=always
+RestartSec=5
+StateDirectory=spanel
+LogsDirectory=spanel
+
+[Install]
+WantedBy=multi-user.target

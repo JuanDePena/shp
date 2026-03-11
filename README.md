@@ -33,10 +33,21 @@ This repository is bootstrapped as a `pnpm` workspace with a shared TypeScript b
 Useful commands:
 
 - `./scripts/bootstrap.sh`
+- `./scripts/bootstrap-shp-standby.sh`
 - `pnpm build`
 - `pnpm typecheck`
 - `pnpm start:api`
+- `pnpm start:web`
 - `pnpm start:worker`
+
+Packaged runtime artifacts:
+
+- `packaging/systemd/spanel-api.service`
+- `packaging/systemd/spanel-web.service`
+- `packaging/systemd/spanel-worker.service`
+- `packaging/env/spanel-api.env.example`
+- `packaging/env/spanel-web.env.example`
+- `packaging/env/spanel-worker.env.example`
 
 ## Current bootstrap endpoints
 

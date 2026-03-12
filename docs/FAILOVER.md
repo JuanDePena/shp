@@ -11,6 +11,9 @@ two-node layout.
 - `spanel-api`, `spanel-web`, and `spanel-worker` are installed on both nodes
 - On the secondary node, the `spanel-*` services remain installed but disabled
   while PostgreSQL is still in physical standby mode
+- `spanel-api` and `spanel-worker` must stay stopped on the standby while
+  PostgreSQL is read-only, because their startup path applies migrations and
+  other control-plane bootstrap writes
 
 ## Preconditions
 
@@ -19,6 +22,52 @@ Before promoting the secondary:
 - confirm the secondary reports `pg_is_in_recovery() = true`
 - confirm `pg_stat_wal_receiver.status = streaming`
 - confirm `wg0` is active on both nodes
+- confirm `/opt/simplehost/spanel/current` exists on the secondary and points to
+  a populated release tree
+
+## Passive runtime refresh
+
+Keep the standby node updated with the same installed `SHP` release as the
+primary, but leave `spanel-*` disabled until a promotion.
+
+If the standby does not have the build toolchain available, refresh it from the
+installed runtime on the primary:
+
+```bash
+release_version="$(basename "$(readlink -f /opt/simplehost/spanel/current)")"
+
+ssh root@vps-16535090.vps.ovh.ca \
+  'install -d /opt/simplehost/spanel/releases /opt/simplehost/spanel/shared /etc/spanel /var/log/spanel'
+
+rsync -a --delete "/opt/simplehost/spanel/releases/${release_version}/" \
+  "root@vps-16535090.vps.ovh.ca:/opt/simplehost/spanel/releases/${release_version}/"
+
+rsync -a \
+  /etc/systemd/system/spanel-api.service \
+  /etc/systemd/system/spanel-web.service \
+  /etc/systemd/system/spanel-worker.service \
+  root@vps-16535090.vps.ovh.ca:/etc/systemd/system/
+
+rsync -a \
+  /etc/spanel/api.env \
+  /etc/spanel/web.env \
+  /etc/spanel/worker.env \
+  /etc/spanel/api.env.example \
+  /etc/spanel/web.env.example \
+  /etc/spanel/worker.env.example \
+  root@vps-16535090.vps.ovh.ca:/etc/spanel/
+
+ssh root@vps-16535090.vps.ovh.ca \
+  "ln -sfn /opt/simplehost/spanel/releases/${release_version} /opt/simplehost/spanel/current && \
+   chown root:spanel /etc/spanel/api.env /etc/spanel/web.env /etc/spanel/worker.env && \
+   chmod 0640 /etc/spanel/api.env /etc/spanel/web.env /etc/spanel/worker.env && \
+   systemctl daemon-reload && \
+   systemctl disable spanel-api.service spanel-web.service spanel-worker.service"
+```
+
+For a passive smoke test on the secondary, only validate `spanel-web` before a
+promotion. `spanel-api` and `spanel-worker` are expected to fail while
+`postgresql-shp` is still in recovery mode.
 
 ## Manual promotion sequence
 

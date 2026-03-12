@@ -71,11 +71,11 @@ export function createPanelRuntimeConfig(
     version: readString(env.SHP_VERSION, "0.1.0"),
     api: {
       host: readString(env.SHP_API_HOST, "127.0.0.1"),
-      port: readPort(env.SHP_API_PORT, 3000)
+      port: readPort(env.SHP_API_PORT, 3100)
     },
     web: {
       host: readString(env.SHP_WEB_HOST, "127.0.0.1"),
-      port: readPort(env.SHP_WEB_PORT, 3100)
+      port: readPort(env.SHP_WEB_PORT, 3200)
     },
     worker: {
       pollIntervalMs: readPositiveInt(env.SHP_WORKER_POLL_INTERVAL_MS, 5000),

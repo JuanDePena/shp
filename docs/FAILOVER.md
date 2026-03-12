@@ -106,8 +106,8 @@ promotion. `spanel-api` and `spanel-worker` are expected to fail while
 5. Validate local service health on the promoted secondary:
 
    ```bash
-   curl -fsS http://127.0.0.1:3000/healthz
-   curl -fsS http://127.0.0.1:3100/
+   curl -fsS http://127.0.0.1:3100/healthz
+   curl -fsS http://127.0.0.1:3200/
    ```
 
 6. Repoint any front-facing proxy or traffic entrypoint to the promoted node as
@@ -146,7 +146,7 @@ standby from the currently active primary.
 - Wait until `pg_is_in_recovery()` returns `f` on the promoted node.
 - Enable and start `spanel-api`, `spanel-web`, and `spanel-worker` on the
   promoted node.
-- Validate `http://127.0.0.1:3000/healthz` and `http://127.0.0.1:3100/` on the
+- Validate `http://127.0.0.1:3100/healthz` and `http://127.0.0.1:3200/` on the
   promoted node.
 - Repoint any front-facing proxy or traffic entrypoint back to the promoted
   node.

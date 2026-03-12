@@ -1,4 +1,10 @@
-import { createHash, randomUUID } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+  randomUUID
+} from "node:crypto";
 
 import { Pool, type PoolClient } from "pg";
 
@@ -205,6 +211,7 @@ export interface PanelControlPlaneStoreOptions {
   bootstrapAdminPassword: string | null;
   bootstrapAdminName: string | null;
   defaultInventoryImportPath: string;
+  jobPayloadSecret: string | null;
 }
 
 export interface PanelControlPlaneStore {
@@ -273,6 +280,97 @@ function hashToken(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+interface EncryptedJobPayloadEnvelope {
+  __simplehostEncryptedJobPayload: true;
+  alg: "aes-256-gcm";
+  iv: string;
+  tag: string;
+  ciphertext: string;
+}
+
+function isEncryptedJobPayloadEnvelope(
+  value: unknown
+): value is EncryptedJobPayloadEnvelope {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  return (
+    record.__simplehostEncryptedJobPayload === true &&
+    record.alg === "aes-256-gcm" &&
+    typeof record.iv === "string" &&
+    typeof record.tag === "string" &&
+    typeof record.ciphertext === "string"
+  );
+}
+
+function deriveJobPayloadKey(secret: string | null): Buffer | null {
+  if (!secret) {
+    return null;
+  }
+
+  return createHash("sha256").update(secret).digest();
+}
+
+function encodeStoredJobPayload(
+  payload: Record<string, unknown>,
+  key: Buffer | null
+): Record<string, unknown> {
+  if (!key) {
+    return payload;
+  }
+
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const ciphertext = Buffer.concat([
+    cipher.update(JSON.stringify(payload), "utf8"),
+    cipher.final()
+  ]);
+  const tag = cipher.getAuthTag();
+
+  return {
+    __simplehostEncryptedJobPayload: true,
+    alg: "aes-256-gcm",
+    iv: iv.toString("base64url"),
+    tag: tag.toString("base64url"),
+    ciphertext: ciphertext.toString("base64url")
+  };
+}
+
+function decodeStoredJobPayload(
+  payload: Record<string, unknown>,
+  key: Buffer | null
+): Record<string, unknown> {
+  if (!isEncryptedJobPayloadEnvelope(payload)) {
+    return payload;
+  }
+
+  if (!key) {
+    throw new Error("SHP job payload secret is required to decrypt queued jobs.");
+  }
+
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    key,
+    Buffer.from(payload.iv, "base64url")
+  );
+  decipher.setAuthTag(Buffer.from(payload.tag, "base64url"));
+
+  const plaintext = Buffer.concat([
+    decipher.update(Buffer.from(payload.ciphertext, "base64url")),
+    decipher.final()
+  ]).toString("utf8");
+  const decoded = JSON.parse(plaintext) as unknown;
+
+  if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) {
+    throw new Error("Stored SHP job payload did not decode to an object.");
+  }
+
+  return decoded as Record<string, unknown>;
+}
+
 function sanitizePayload(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map((entry) => sanitizePayload(entry));
@@ -297,9 +395,11 @@ function sanitizePayload(value: unknown): unknown {
 
 function toDispatchedJob(
   row: JobRow,
+  payloadKey: Buffer | null,
   options: { sanitizeSecrets?: boolean } = {}
 ): DispatchedJobEnvelope {
   const { sanitizeSecrets = true } = options;
+  const decodedPayload = decodeStoredJobPayload(row.payload, payloadKey);
 
   return {
     id: row.id,
@@ -307,7 +407,7 @@ function toDispatchedJob(
     kind: row.kind as DispatchedJobEnvelope["kind"],
     nodeId: row.node_id,
     createdAt: normalizeTimestamp(row.created_at),
-    payload: (sanitizeSecrets ? sanitizePayload(row.payload) : row.payload) as Record<
+    payload: (sanitizeSecrets ? sanitizePayload(decodedPayload) : decodedPayload) as Record<
       string,
       unknown
     >
@@ -1225,7 +1325,8 @@ async function insertDispatchedJobs(
   client: PoolClient,
   jobs: DispatchedJobEnvelope[],
   actorUserId: string,
-  dispatchReason: string
+  dispatchReason: string,
+  payloadKey: Buffer | null
 ): Promise<void> {
   const createdAt = new Date().toISOString();
 
@@ -1252,7 +1353,7 @@ async function insertDispatchedJobs(
         job.kind,
         job.nodeId,
         job.createdAt,
-        JSON.stringify(job.payload),
+        JSON.stringify(encodeStoredJobPayload(job.payload, payloadKey)),
         actorUserId,
         dispatchReason
       ]
@@ -1279,6 +1380,7 @@ export async function createPostgresControlPlaneStore(
   options: PanelControlPlaneStoreOptions
 ): Promise<PanelControlPlaneStore> {
   const pollIntervalMs = options.pollIntervalMs ?? 5000;
+  const jobPayloadKey = deriveJobPayloadKey(options.jobPayloadSecret);
   const pool = new Pool({
     connectionString: databaseUrl,
     application_name: "simplehost-panel-api"
@@ -1426,7 +1528,9 @@ export async function createPostgresControlPlaneStore(
           occurredAt: claimedAt
         });
 
-        return result.rows.map((row) => toDispatchedJob(row, { sanitizeSecrets: false }));
+        return result.rows.map((row) =>
+          toDispatchedJob(row, jobPayloadKey, { sanitizeSecrets: false })
+        );
       });
 
       return {
@@ -1449,11 +1553,36 @@ export async function createPostgresControlPlaneStore(
           [request.nodeId, reportedAt]
         );
 
+        const jobResult = await client.query<JobRow>(
+          `SELECT
+             id,
+             desired_state_version,
+             kind,
+             node_id,
+             created_at,
+             payload
+           FROM control_plane_jobs
+           WHERE id = $1`,
+          [request.result.jobId]
+        );
+        const storedJob = jobResult.rows[0];
+
+        if (!storedJob) {
+          throw new Error(`Claimed job ${request.result.jobId} no longer exists.`);
+        }
+
         await client.query(
           `UPDATE control_plane_jobs
-           SET completed_at = $2
+           SET completed_at = $2,
+               payload = $3::jsonb
            WHERE id = $1`,
-          [request.result.jobId, request.result.completedAt]
+          [
+            request.result.jobId,
+            request.result.completedAt,
+            JSON.stringify(
+              sanitizePayload(decodeStoredJobPayload(storedJob.payload, jobPayloadKey))
+            )
+          ]
         );
 
         await client.query(
@@ -1926,7 +2055,8 @@ export async function createPostgresControlPlaneStore(
           client,
           jobs,
           actor.userId,
-          `dns.sync:${zoneName}`
+          `dns.sync:${zoneName}`,
+          jobPayloadKey
         );
 
         return {
@@ -1992,7 +2122,8 @@ export async function createPostgresControlPlaneStore(
           client,
           jobs,
           actor.userId,
-          `app.reconcile:${appSlug}`
+          `app.reconcile:${appSlug}`,
+          jobPayloadKey
         );
 
         return {
@@ -2026,7 +2157,8 @@ export async function createPostgresControlPlaneStore(
           client,
           jobs,
           actor.userId,
-          `database.reconcile:${appSlug}`
+          `database.reconcile:${appSlug}`,
+          jobPayloadKey
         );
 
         return {
@@ -2082,7 +2214,7 @@ export async function createPostgresControlPlaneStore(
       const pendingJobs: Record<string, DispatchedJobEnvelope[]> = {};
 
       for (const row of pendingJobResult.rows) {
-        const job = toDispatchedJob(row);
+        const job = toDispatchedJob(row, jobPayloadKey);
         pendingJobs[job.nodeId] ??= [];
         pendingJobs[job.nodeId].push(job);
       }

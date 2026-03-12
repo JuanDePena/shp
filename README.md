@@ -100,6 +100,8 @@ Current behavior:
 - imported inventory is normalized into tenants, nodes, zones, apps, sites, and databases
 - `proxy.render` for `active-passive` apps now dispatches to both `primary` and `secondary`
 - API endpoints can now dispatch real `proxy.render`, `dns.sync`, `postgres.reconcile`, and `mariadb.reconcile` jobs
+- job payloads are encrypted at rest in `SHP` when `SHP_JOB_SECRET_KEY` is configured
+- completed jobs are scrubbed so secret fields do not remain in `control_plane_jobs`
 - node enrollment requires `SHP_BOOTSTRAP_ENROLLMENT_TOKEN`
 - each enrolled node receives its own bearer token for subsequent control-plane calls
 - pending and reported job state is visible through `/v1/control-plane/state`

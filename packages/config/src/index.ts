@@ -24,6 +24,10 @@ export interface PanelInventoryRuntimeConfig {
   importPath: string;
 }
 
+export interface PanelJobRuntimeConfig {
+  payloadSecret: string | null;
+}
+
 export interface PanelRuntimeConfig {
   env: string;
   version: string;
@@ -33,6 +37,7 @@ export interface PanelRuntimeConfig {
   database: PanelDatabaseRuntimeConfig;
   auth: PanelAuthRuntimeConfig;
   inventory: PanelInventoryRuntimeConfig;
+  jobs: PanelJobRuntimeConfig;
 }
 
 function readString(value: string | undefined, fallback: string): string {
@@ -99,6 +104,11 @@ export function createPanelRuntimeConfig(
         env.SHP_INVENTORY_PATH,
         "/etc/spanel/inventory.apps.yaml"
       )
+    },
+    jobs: {
+      payloadSecret:
+        readOptionalString(env.SHP_JOB_SECRET_KEY) ??
+        readOptionalString(env.SHP_BOOTSTRAP_ENROLLMENT_TOKEN)
     }
   };
 }

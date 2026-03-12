@@ -18,7 +18,25 @@ if [[ ! -d "${release_dir}" ]]; then
   "${repo_root}/scripts/install-release.sh" "${version}"
 fi
 
+ensure_env_version() {
+  local target_path="$1"
+  local example_path="$2"
+
+  if [[ ! -f "${target_path}" ]]; then
+    install -m 0640 "${example_path}" "${target_path}"
+  fi
+
+  if grep -q '^SHP_VERSION=' "${target_path}"; then
+    sed -i "s/^SHP_VERSION=.*/SHP_VERSION=${version}/" "${target_path}"
+  else
+    printf '\nSHP_VERSION=%s\n' "${version}" >>"${target_path}"
+  fi
+}
+
 activate_local() {
+  ensure_env_version /etc/spanel/api.env "${release_dir}/packaging/env/spanel-api.env.example"
+  ensure_env_version /etc/spanel/web.env "${release_dir}/packaging/env/spanel-web.env.example"
+  ensure_env_version /etc/spanel/worker.env "${release_dir}/packaging/env/spanel-worker.env.example"
   systemctl daemon-reload
 
   if [[ "${mode}" == "passive" ]]; then
@@ -48,6 +66,12 @@ activate_remote() {
      install -m 0644 '${remote_release_dir}/packaging/env/spanel-api.env.example' /etc/spanel/api.env.example && \
      install -m 0644 '${remote_release_dir}/packaging/env/spanel-web.env.example' /etc/spanel/web.env.example && \
      install -m 0644 '${remote_release_dir}/packaging/env/spanel-worker.env.example' /etc/spanel/worker.env.example && \
+     if [ ! -f /etc/spanel/api.env ]; then install -m 0640 '${remote_release_dir}/packaging/env/spanel-api.env.example' /etc/spanel/api.env; fi && \
+     if [ ! -f /etc/spanel/web.env ]; then install -m 0640 '${remote_release_dir}/packaging/env/spanel-web.env.example' /etc/spanel/web.env; fi && \
+     if [ ! -f /etc/spanel/worker.env ]; then install -m 0640 '${remote_release_dir}/packaging/env/spanel-worker.env.example' /etc/spanel/worker.env; fi && \
+     if grep -q '^SHP_VERSION=' /etc/spanel/api.env; then sed -i 's/^SHP_VERSION=.*/SHP_VERSION=${version}/' /etc/spanel/api.env; else printf '\nSHP_VERSION=${version}\n' >> /etc/spanel/api.env; fi && \
+     if grep -q '^SHP_VERSION=' /etc/spanel/web.env; then sed -i 's/^SHP_VERSION=.*/SHP_VERSION=${version}/' /etc/spanel/web.env; else printf '\nSHP_VERSION=${version}\n' >> /etc/spanel/web.env; fi && \
+     if grep -q '^SHP_VERSION=' /etc/spanel/worker.env; then sed -i 's/^SHP_VERSION=.*/SHP_VERSION=${version}/' /etc/spanel/worker.env; else printf '\nSHP_VERSION=${version}\n' >> /etc/spanel/worker.env; fi && \
      systemctl daemon-reload"
 
   if [[ "${mode}" == "passive" ]]; then

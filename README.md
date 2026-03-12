@@ -66,6 +66,7 @@ Packaged runtime artifacts:
 - `packaging/env/spanel-worker.env.example`
 - `packaging/httpd/spanel-web-http.conf.template`
 - `packaging/httpd/spanel-web-https.conf.template`
+- `packaging/httpd/spanel-ssl-listen.conf`
 - `packaging/postgresql/shp/conf/postgresql.shp.primary.conf`
 - `packaging/postgresql/shp/conf/postgresql.shp.standby.conf`
 - `packaging/postgresql/shp/conf/pg_hba.shp.conf`

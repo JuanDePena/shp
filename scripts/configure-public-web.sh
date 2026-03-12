@@ -13,9 +13,11 @@ fi
 cert_email="${4:-${CERTBOT_EMAIL:-${default_cert_email}}}"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ssl_listen_template="${repo_root}/packaging/httpd/spanel-ssl-listen.conf"
 http_template="${repo_root}/packaging/httpd/spanel-web-http.conf.template"
 https_template="${repo_root}/packaging/httpd/spanel-web-https.conf.template"
 httpd_conf="/etc/httpd/conf.d/spanel-web.conf"
+httpd_ssl_listen_conf="/etc/httpd/conf.d/00-spanel-ssl-listen.conf"
 cert_name="${server_name}"
 letsencrypt_root="/var/www/letsencrypt/.well-known/acme-challenge"
 
@@ -56,6 +58,7 @@ firewall-cmd --reload
 setsebool -P httpd_can_network_connect 1
 
 render_template "${http_template}" "${httpd_conf}"
+install -m 0644 "${ssl_listen_template}" "${httpd_ssl_listen_conf}"
 
 systemctl enable httpd.service
 systemctl enable --now certbot-renew.timer

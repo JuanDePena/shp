@@ -211,6 +211,15 @@ async function requestHandler(
     return;
   }
 
+  if (request.method === "GET" && url.pathname === "/v1/resources/drift") {
+    writeJson(
+      response,
+      200,
+      await controlPlaneStore.getResourceDrift(readBearerToken(request))
+    );
+    return;
+  }
+
   if (request.method === "GET" && url.pathname === "/v1/nodes/health") {
     writeJson(response, 200, await controlPlaneStore.getNodeHealth(readBearerToken(request)));
     return;
@@ -367,6 +376,7 @@ async function requestHandler(
         "GET /v1/inventory/export",
         "GET /v1/resources/spec",
         "PUT /v1/resources/spec",
+        "GET /v1/resources/drift",
         "POST /v1/reconcile/run",
         "GET /v1/operations/overview",
         "GET /v1/nodes/health",

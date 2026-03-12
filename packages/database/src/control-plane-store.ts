@@ -28,6 +28,7 @@ import {
   panelGlobalRoles,
   type NodeHealthSnapshot,
   type OperationsOverview,
+  type ResourceDriftSummary,
   type ReconciliationRunSummary,
   type AppReconcileRequest,
   type AuthLoginRequest,
@@ -247,6 +248,14 @@ interface BackupRunRow {
   completed_at: Date | string | null;
 }
 
+interface DriftStatusRow {
+  id: string;
+  payload_hash: string | null;
+  completed_at: Date | string | null;
+  status: string | null;
+  summary: string | null;
+}
+
 interface ReconciliationRunRow {
   run_id: string;
   desired_state_version: string;
@@ -353,6 +362,7 @@ export interface PanelControlPlaneStore {
   ): Promise<JobDispatchResponse>;
   runReconciliationCycle(presentedToken?: string | null): Promise<ReconciliationRunSummary>;
   getOperationsOverview(presentedToken: string | null): Promise<OperationsOverview>;
+  getResourceDrift(presentedToken: string | null): Promise<ResourceDriftSummary[]>;
   getNodeHealth(presentedToken: string | null): Promise<NodeHealthSnapshot[]>;
   listJobHistory(
     presentedToken: string | null,
@@ -1482,6 +1492,17 @@ async function applyDesiredStateSpec(
   spec: DesiredStateSpec,
   payloadKey: Buffer | null
 ): Promise<void> {
+  validateDesiredStateSpec(spec);
+
+  const desiredTenantIds = spec.tenants.map((tenant) => `tenant-${tenant.slug}`);
+  const desiredNodeIds = spec.nodes.map((node) => node.nodeId);
+  const desiredZoneIds = spec.zones.map((zone) => `zone-${zone.zoneName}`);
+  const desiredAppIds = spec.apps.map((app) => `app-${app.slug}`);
+  const desiredDatabaseIds = spec.databases.map((database) => `database-${database.appSlug}`);
+  const desiredBackupPolicyIds = spec.backupPolicies.map(
+    (policy) => `backup-policy-${policy.policySlug}`
+  );
+
   for (const tenant of spec.tenants) {
     await client.query(
       `INSERT INTO shp_tenants (
@@ -1617,6 +1638,8 @@ async function applyDesiredStateSpec(
       ]
     );
 
+    await client.query(`DELETE FROM shp_sites WHERE app_id = $1`, [appId]);
+
     await client.query(
       `INSERT INTO shp_sites (
          site_id,
@@ -1729,6 +1752,42 @@ async function applyDesiredStateSpec(
       ]
     );
   }
+
+  await client.query(
+    `DELETE FROM shp_backup_policies
+     WHERE NOT (policy_id = ANY($1::text[]))`,
+    [desiredBackupPolicyIds]
+  );
+  await client.query(
+    `DELETE FROM shp_database_credentials
+     WHERE NOT (database_id = ANY($1::text[]))`,
+    [desiredDatabaseIds]
+  );
+  await client.query(
+    `DELETE FROM shp_databases
+     WHERE NOT (database_id = ANY($1::text[]))`,
+    [desiredDatabaseIds]
+  );
+  await client.query(
+    `DELETE FROM shp_apps
+     WHERE NOT (app_id = ANY($1::text[]))`,
+    [desiredAppIds]
+  );
+  await client.query(
+    `DELETE FROM shp_dns_zones
+     WHERE NOT (zone_id = ANY($1::text[]))`,
+    [desiredZoneIds]
+  );
+  await client.query(
+    `DELETE FROM shp_nodes
+     WHERE NOT (node_id = ANY($1::text[]))`,
+    [desiredNodeIds]
+  );
+  await client.query(
+    `DELETE FROM shp_tenants
+     WHERE NOT (tenant_id = ANY($1::text[]))`,
+    [desiredTenantIds]
+  );
 }
 
 function buildZoneRecords(
@@ -1922,6 +1981,148 @@ function summarizeDesiredStateSpec(
   };
 }
 
+function ensureUnique(values: string[], label: string): void {
+  const seen = new Set<string>();
+
+  for (const value of values) {
+    if (seen.has(value)) {
+      throw new Error(`Duplicate ${label}: ${value}.`);
+    }
+
+    seen.add(value);
+  }
+}
+
+function validateDesiredStateSpec(spec: DesiredStateSpec): void {
+  ensureUnique(
+    spec.tenants.map((tenant) => tenant.slug),
+    "tenant slug"
+  );
+  ensureUnique(
+    spec.nodes.map((node) => node.nodeId),
+    "node id"
+  );
+  ensureUnique(
+    spec.zones.map((zone) => zone.zoneName),
+    "zone name"
+  );
+  ensureUnique(
+    spec.apps.map((app) => app.slug),
+    "app slug"
+  );
+  ensureUnique(
+    spec.apps.map((app) => app.canonicalDomain),
+    "site canonical domain"
+  );
+  ensureUnique(
+    spec.databases.map((database) => `${database.engine}:${database.databaseName}`),
+    "database name"
+  );
+  ensureUnique(
+    spec.databases.map((database) => `${database.engine}:${database.databaseUser}`),
+    "database user"
+  );
+  ensureUnique(
+    spec.backupPolicies.map((policy) => policy.policySlug),
+    "backup policy slug"
+  );
+
+  const tenantSlugs = new Set(spec.tenants.map((tenant) => tenant.slug));
+  const nodeIds = new Set(spec.nodes.map((node) => node.nodeId));
+  const zonesByName = new Map(spec.zones.map((zone) => [zone.zoneName, zone]));
+  const appsBySlug = new Map(spec.apps.map((app) => [app.slug, app]));
+
+  for (const zone of spec.zones) {
+    if (!tenantSlugs.has(zone.tenantSlug)) {
+      throw new Error(`Zone ${zone.zoneName} references unknown tenant ${zone.tenantSlug}.`);
+    }
+
+    if (!nodeIds.has(zone.primaryNodeId)) {
+      throw new Error(`Zone ${zone.zoneName} references unknown node ${zone.primaryNodeId}.`);
+    }
+  }
+
+  for (const app of spec.apps) {
+    if (!tenantSlugs.has(app.tenantSlug)) {
+      throw new Error(`Application ${app.slug} references unknown tenant ${app.tenantSlug}.`);
+    }
+
+    const zone = zonesByName.get(app.zoneName);
+
+    if (!zone) {
+      throw new Error(`Application ${app.slug} references unknown zone ${app.zoneName}.`);
+    }
+
+    if (zone.tenantSlug !== app.tenantSlug) {
+      throw new Error(
+        `Application ${app.slug} tenant ${app.tenantSlug} does not match zone tenant ${zone.tenantSlug}.`
+      );
+    }
+
+    if (!nodeIds.has(app.primaryNodeId)) {
+      throw new Error(`Application ${app.slug} references unknown node ${app.primaryNodeId}.`);
+    }
+
+    if (app.standbyNodeId && !nodeIds.has(app.standbyNodeId)) {
+      throw new Error(
+        `Application ${app.slug} references unknown standby node ${app.standbyNodeId}.`
+      );
+    }
+  }
+
+  for (const database of spec.databases) {
+    const app = appsBySlug.get(database.appSlug);
+
+    if (!app) {
+      throw new Error(
+        `Database ${database.databaseName} references unknown application ${database.appSlug}.`
+      );
+    }
+
+    if (!nodeIds.has(database.primaryNodeId)) {
+      throw new Error(
+        `Database ${database.databaseName} references unknown node ${database.primaryNodeId}.`
+      );
+    }
+
+    if (database.standbyNodeId && !nodeIds.has(database.standbyNodeId)) {
+      throw new Error(
+        `Database ${database.databaseName} references unknown standby node ${database.standbyNodeId}.`
+      );
+    }
+
+    if (database.engine !== "postgresql" && database.engine !== "mariadb") {
+      throw new Error(`Database ${database.databaseName} uses unsupported engine ${database.engine}.`);
+    }
+
+    if (database.pendingMigrationTo && database.pendingMigrationTo === database.engine) {
+      throw new Error(
+        `Database ${database.databaseName} pending migration target matches the current engine.`
+      );
+    }
+
+    if (app.primaryNodeId !== database.primaryNodeId) {
+      throw new Error(
+        `Database ${database.databaseName} primary node ${database.primaryNodeId} does not match app ${app.slug} primary node ${app.primaryNodeId}.`
+      );
+    }
+  }
+
+  for (const policy of spec.backupPolicies) {
+    if (!tenantSlugs.has(policy.tenantSlug)) {
+      throw new Error(
+        `Backup policy ${policy.policySlug} references unknown tenant ${policy.tenantSlug}.`
+      );
+    }
+
+    if (!nodeIds.has(policy.targetNodeId)) {
+      throw new Error(
+        `Backup policy ${policy.policySlug} references unknown node ${policy.targetNodeId}.`
+      );
+    }
+  }
+}
+
 async function buildZoneDnsPayload(
   client: PoolClient,
   zoneName: string
@@ -1957,6 +2158,20 @@ async function buildZoneDnsPayload(
      ORDER BY records.name ASC, records.type ASC, records.value ASC`,
     [zoneName]
   );
+  const siteResult = await client.query<{
+    canonical_domain: string;
+    aliases: string[];
+  }>(
+    `SELECT sites.canonical_domain, sites.aliases
+     FROM shp_sites sites
+     INNER JOIN shp_apps apps
+       ON apps.app_id = sites.app_id
+     INNER JOIN shp_dns_zones zones
+       ON zones.zone_id = apps.zone_id
+     WHERE zones.zone_name = $1
+     ORDER BY sites.canonical_domain ASC`,
+    [zoneName]
+  );
 
   return {
     nodeId: zone.primary_node_id,
@@ -1974,7 +2189,7 @@ async function buildZoneDnsPayload(
                 ttl: row.ttl
               }))
             )
-          : buildZoneRecords(zoneName, zone.public_ipv4, [])
+          : buildZoneRecords(zoneName, zone.public_ipv4, siteResult.rows)
     }
   };
 }
@@ -2234,15 +2449,14 @@ async function shouldDispatchQueuedJob(
   client: PoolClient,
   job: QueuedDispatchJob
 ): Promise<boolean> {
-  const result = await client.query<{
-    payload_hash: string | null;
-    completed_at: Date | string | null;
-    status: string | null;
-  }>(
+  const result = await client.query<DriftStatusRow>(
     `SELECT
+       jobs.id,
        jobs.payload_hash,
        jobs.completed_at,
        results.status
+       ,
+       results.summary
      FROM control_plane_jobs jobs
      LEFT JOIN control_plane_job_results results
        ON results.job_id = jobs.id
@@ -2268,6 +2482,103 @@ async function shouldDispatchQueuedJob(
   }
 
   return latest.status !== "applied";
+}
+
+async function getLatestResourceJob(
+  client: PoolClient,
+  job: QueuedDispatchJob
+): Promise<DriftStatusRow | null> {
+  const result = await client.query<DriftStatusRow>(
+    `SELECT
+       jobs.id,
+       jobs.payload_hash,
+       jobs.completed_at,
+       results.status,
+       results.summary
+     FROM control_plane_jobs jobs
+     LEFT JOIN control_plane_job_results results
+       ON results.job_id = jobs.id
+     WHERE jobs.node_id = $1
+       AND jobs.kind = $2
+       AND jobs.resource_key = $3
+     ORDER BY jobs.created_at DESC
+     LIMIT $4`,
+    [job.envelope.nodeId, job.envelope.kind, job.resourceKey, 1]
+  );
+
+  return result.rows[0] ?? null;
+}
+
+function createResourceDriftSummary(
+  job: QueuedDispatchJob,
+  latest: DriftStatusRow | null
+): ResourceDriftSummary {
+  if (!latest) {
+    return {
+      resourceKind: job.resourceKind as ResourceDriftSummary["resourceKind"],
+      resourceKey: job.resourceKey,
+      nodeId: job.envelope.nodeId,
+      driftStatus: "out_of_sync",
+      desiredPayloadHash: job.payloadHash,
+      dispatchRecommended: true
+    };
+  }
+
+  if (!latest.completed_at) {
+    return {
+      resourceKind: job.resourceKind as ResourceDriftSummary["resourceKind"],
+      resourceKey: job.resourceKey,
+      nodeId: job.envelope.nodeId,
+      driftStatus: "pending",
+      desiredPayloadHash: job.payloadHash,
+      latestPayloadHash: latest.payload_hash ?? undefined,
+      latestJobId: latest.id,
+      dispatchRecommended: latest.payload_hash !== job.payloadHash
+    };
+  }
+
+  if (latest.payload_hash !== job.payloadHash) {
+    return {
+      resourceKind: job.resourceKind as ResourceDriftSummary["resourceKind"],
+      resourceKey: job.resourceKey,
+      nodeId: job.envelope.nodeId,
+      driftStatus: "out_of_sync",
+      desiredPayloadHash: job.payloadHash,
+      latestPayloadHash: latest.payload_hash ?? undefined,
+      latestJobId: latest.id,
+      latestJobStatus: (latest.status as ResourceDriftSummary["latestJobStatus"]) ?? undefined,
+      latestSummary: latest.summary ?? undefined,
+      dispatchRecommended: true
+    };
+  }
+
+  if (latest.status !== "applied") {
+    return {
+      resourceKind: job.resourceKind as ResourceDriftSummary["resourceKind"],
+      resourceKey: job.resourceKey,
+      nodeId: job.envelope.nodeId,
+      driftStatus: "failed",
+      desiredPayloadHash: job.payloadHash,
+      latestPayloadHash: latest.payload_hash ?? undefined,
+      latestJobId: latest.id,
+      latestJobStatus: (latest.status as ResourceDriftSummary["latestJobStatus"]) ?? undefined,
+      latestSummary: latest.summary ?? undefined,
+      dispatchRecommended: true
+    };
+  }
+
+  return {
+    resourceKind: job.resourceKind as ResourceDriftSummary["resourceKind"],
+    resourceKey: job.resourceKey,
+    nodeId: job.envelope.nodeId,
+    driftStatus: "in_sync",
+    desiredPayloadHash: job.payloadHash,
+    latestPayloadHash: latest.payload_hash ?? undefined,
+    latestJobId: latest.id,
+    latestJobStatus: "applied",
+    latestSummary: latest.summary ?? undefined,
+    dispatchRecommended: false
+  };
 }
 
 async function getLatestReconciliationRun(
@@ -2306,6 +2617,11 @@ async function buildReconciliationCandidates(
 
   for (const row of zoneResult.rows) {
     const plan = await buildZoneDnsPayload(client, row.zone_name);
+
+    if (plan.payload.records.length === 0) {
+      continue;
+    }
+
     jobs.push(
       createQueuedDispatchJob(
         createDispatchedJobEnvelope(
@@ -3037,25 +3353,29 @@ export async function createPostgresControlPlaneStore(
         const databasePlan = await buildDatabasePayload(
           client,
           appSlug,
-          request.password,
+          request.password ?? null,
           jobPayloadKey
         );
-        await client.query(
-          `INSERT INTO shp_database_credentials (
-             database_id,
-             secret_payload,
-             updated_at
-           )
-           VALUES ($1, $2::jsonb, NOW())
-           ON CONFLICT (database_id)
-           DO UPDATE SET
-             secret_payload = EXCLUDED.secret_payload,
-             updated_at = EXCLUDED.updated_at`,
-          [
-            `database-${appSlug}`,
-            JSON.stringify(encodeDesiredPassword(request.password, jobPayloadKey))
-          ]
-        );
+
+        if (request.password) {
+          await client.query(
+            `INSERT INTO shp_database_credentials (
+               database_id,
+               secret_payload,
+               updated_at
+             )
+             VALUES ($1, $2::jsonb, NOW())
+             ON CONFLICT (database_id)
+             DO UPDATE SET
+               secret_payload = EXCLUDED.secret_payload,
+               updated_at = EXCLUDED.updated_at`,
+            [
+              `database-${appSlug}`,
+              JSON.stringify(encodeDesiredPassword(request.password, jobPayloadKey))
+            ]
+          );
+        }
+
         const jobs = [
           createQueuedDispatchJob(
             createDispatchedJobEnvelope(
@@ -3179,6 +3499,43 @@ export async function createPostgresControlPlaneStore(
           ]);
         }
 
+        const drift = await (async () => {
+          const { jobs, missingCredentialCount } = await buildReconciliationCandidates(
+            client,
+            jobPayloadKey,
+            `drift-${Date.now()}`
+          );
+          const summaries: ResourceDriftSummary[] = [];
+
+          for (const job of jobs) {
+            summaries.push(createResourceDriftSummary(job, await getLatestResourceJob(client, job)));
+          }
+
+          if (missingCredentialCount > 0) {
+            const missingDatabases = await client.query<{ slug: string }>(
+              `SELECT apps.slug
+               FROM shp_databases databases
+               INNER JOIN shp_apps apps
+                 ON apps.app_id = databases.app_id
+               LEFT JOIN shp_database_credentials credentials
+                 ON credentials.database_id = databases.database_id
+               WHERE credentials.database_id IS NULL
+               ORDER BY apps.slug ASC`
+            );
+
+            for (const row of missingDatabases.rows) {
+              summaries.push({
+                resourceKind: "database",
+                resourceKey: `database:${row.slug}`,
+                nodeId: "unknown",
+                driftStatus: "missing_secret",
+                dispatchRecommended: false
+              });
+            }
+          }
+
+          return summaries;
+        })();
         const [nodeCountResult, pendingJobCountResult, failedJobCountResult, backupPolicyCountResult, latestReconciliation] =
           await Promise.all([
             client.query<{ count: string }>(`SELECT COUNT(*) AS count FROM shp_nodes`),
@@ -3202,8 +3559,57 @@ export async function createPostgresControlPlaneStore(
           pendingJobCount: Number(pendingJobCountResult.rows[0]?.count ?? 0),
           failedJobCount: Number(failedJobCountResult.rows[0]?.count ?? 0),
           backupPolicyCount: Number(backupPolicyCountResult.rows[0]?.count ?? 0),
+          driftedResourceCount: drift.filter((item) => item.driftStatus !== "in_sync").length,
           latestReconciliation: latestReconciliation ?? undefined
         };
+      });
+    },
+
+    async getResourceDrift(presentedToken) {
+      return withTransaction(pool, async (client) => {
+        await requireAuthorizedUser(client, presentedToken, [
+          "platform_admin",
+          "platform_operator"
+        ]);
+        const { jobs, missingCredentialCount } = await buildReconciliationCandidates(
+          client,
+          jobPayloadKey,
+          `drift-${Date.now()}`
+        );
+        const summaries: ResourceDriftSummary[] = [];
+
+        for (const job of jobs) {
+          summaries.push(createResourceDriftSummary(job, await getLatestResourceJob(client, job)));
+        }
+
+        if (missingCredentialCount > 0) {
+          const missingDatabases = await client.query<{ slug: string; primary_node_id: string }>(
+            `SELECT apps.slug, databases.primary_node_id
+             FROM shp_databases databases
+             INNER JOIN shp_apps apps
+               ON apps.app_id = databases.app_id
+             LEFT JOIN shp_database_credentials credentials
+               ON credentials.database_id = databases.database_id
+             WHERE credentials.database_id IS NULL
+             ORDER BY apps.slug ASC`
+          );
+
+          for (const row of missingDatabases.rows) {
+            summaries.push({
+              resourceKind: "database",
+              resourceKey: `database:${row.slug}`,
+              nodeId: row.primary_node_id,
+              driftStatus: "missing_secret",
+              dispatchRecommended: false
+            });
+          }
+        }
+
+        return summaries.sort((left, right) =>
+          `${left.resourceKind}:${left.resourceKey}:${left.nodeId}`.localeCompare(
+            `${right.resourceKind}:${right.resourceKey}:${right.nodeId}`
+          )
+        );
       });
     },
 

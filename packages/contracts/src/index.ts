@@ -257,7 +257,7 @@ export interface AppReconcileRequest {
 }
 
 export interface DatabaseReconcileRequest {
-  password: string;
+  password?: string;
 }
 
 export interface JobDispatchResponse {
@@ -447,7 +447,21 @@ export interface OperationsOverview {
   pendingJobCount: number;
   failedJobCount: number;
   backupPolicyCount: number;
+  driftedResourceCount: number;
   latestReconciliation?: ReconciliationRunSummary;
+}
+
+export interface ResourceDriftSummary {
+  resourceKind: "dns" | "site" | "database";
+  resourceKey: string;
+  nodeId: string;
+  driftStatus: "in_sync" | "pending" | "failed" | "out_of_sync" | "missing_secret";
+  desiredPayloadHash?: string;
+  latestPayloadHash?: string;
+  latestJobId?: string;
+  latestJobStatus?: DispatchedJobStatus;
+  latestSummary?: string;
+  dispatchRecommended: boolean;
 }
 
 export interface PanelApiMetadata {

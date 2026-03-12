@@ -35,6 +35,7 @@ Useful commands:
 - `./scripts/bootstrap.sh`
 - `./scripts/bootstrap-shp-standby.sh`
 - `./scripts/install-release.sh`
+- `./scripts/deploy-release.sh`
 - `./scripts/build-release-bundle.sh`
 - `./scripts/install-bundle.sh`
 - `./scripts/rollback-release.sh`
@@ -86,6 +87,7 @@ The current API bootstrap now exposes a minimal control-plane loop for `SHM`:
 - `GET /v1/inventory/export`
 - `GET /v1/resources/spec`
 - `PUT /v1/resources/spec`
+- `GET /v1/resources/drift`
 - `POST /v1/reconcile/run`
 - `GET /v1/operations/overview`
 - `GET /v1/nodes/health`
@@ -116,6 +118,7 @@ Current behavior:
 - `proxy.render` for `active-passive` apps now dispatches to both `primary` and `secondary`
 - API endpoints can now dispatch real `proxy.render`, `dns.sync`, `postgres.reconcile`, and `mariadb.reconcile` jobs
 - the worker now performs automatic desired-state reconciliation and dispatches only when the target payload hash changes or the previous apply failed
+- the web service now exposes a server-rendered operator UI with login, desired-state CRUD, drift visibility, job history, and backup visibility
 - job payloads are encrypted at rest in `SHP` when `SHP_JOB_SECRET_KEY` is configured
 - desired database passwords are stored encrypted at rest when supplied through `SHP`
 - completed jobs are scrubbed so secret fields do not remain in `control_plane_jobs`

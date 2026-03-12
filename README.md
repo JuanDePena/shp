@@ -50,6 +50,10 @@ Packaged runtime artifacts:
 - `packaging/env/spanel-web.env.example`
 - `packaging/env/spanel-worker.env.example`
 
+Operational references:
+
+- [`docs/FAILOVER.md`](/opt/simplehost/repos/simplehost-panel/docs/FAILOVER.md)
+
 ## Current bootstrap endpoints
 
 The current API bootstrap now exposes a minimal control-plane loop for `SHM`:

@@ -35,12 +35,19 @@ Useful commands:
 - `./scripts/bootstrap.sh`
 - `./scripts/bootstrap-shp-standby.sh`
 - `./scripts/install-release.sh`
+- `pnpm version:set -- 2603.12.00`
+- `pnpm version:today`
 - `pnpm build`
 - `SHP_DATABASE_URL=postgresql://... pnpm db:migrate`
 - `pnpm typecheck`
 - `pnpm start:api`
 - `pnpm start:web`
 - `pnpm start:worker`
+
+Release version format:
+
+- `YYMM.DD.NN`
+- first stamped release: `2603.12.00`
 
 Packaged runtime artifacts:
 

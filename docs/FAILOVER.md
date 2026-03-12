@@ -123,6 +123,36 @@ Rebuild the old primary as a fresh standby:
 2. verify streaming replication is back
 3. keep `spanel-*` disabled on the rebuilt standby unless you are failing back
 
+## Manual failback checklist
+
+Use this checklist only after the failed node has been rebuilt cleanly as a
+standby from the currently active primary.
+
+- Confirm the current primary is healthy and serving `SHP` traffic correctly.
+- Confirm the node you want to fail back to reports `pg_is_in_recovery() = true`.
+- Confirm `pg_stat_wal_receiver.status = streaming` on that standby.
+- Confirm `/opt/simplehost/spanel/current` on the standby points to the same
+  installed release generation you expect to promote.
+- Confirm `spanel-api`, `spanel-web`, and `spanel-worker` are still disabled on
+  the standby before promotion.
+- Stop `spanel-worker`, `spanel-api`, and `spanel-web` on the current primary.
+- Promote the standby that will become the new primary:
+
+  ```bash
+  sudo -u postgres psql -p 5433 -c 'select pg_promote();'
+  ```
+
+- Wait until `pg_is_in_recovery()` returns `f` on the promoted node.
+- Enable and start `spanel-api`, `spanel-web`, and `spanel-worker` on the
+  promoted node.
+- Validate `http://127.0.0.1:3000/healthz` and `http://127.0.0.1:3100/` on the
+  promoted node.
+- Repoint any front-facing proxy or traffic entrypoint back to the promoted
+  node.
+- Rebuild the old primary as a fresh standby from the new primary.
+- Keep `spanel-*` disabled on the rebuilt standby after failback until the next
+  planned switchover or incident.
+
 ## Notes
 
 - This is a manual failover design by intent.

@@ -385,12 +385,43 @@ function sanitizePayload(value: unknown): unknown {
 
   for (const [key, entry] of Object.entries(record)) {
     sanitized[key] =
-      key.toLowerCase().includes("password") || key.toLowerCase().includes("secret")
+      key.toLowerCase().includes("password") ||
+      key.toLowerCase().includes("secret") ||
+      key.toLowerCase().includes("token")
         ? "[redacted]"
         : sanitizePayload(entry);
   }
 
   return sanitized;
+}
+
+function stripSensitivePayloadFields(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => stripSensitivePayloadFields(entry));
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  const stripped: Record<string, unknown> = {};
+
+  for (const [key, entry] of Object.entries(record)) {
+    const normalizedKey = key.toLowerCase();
+
+    if (
+      normalizedKey.includes("password") ||
+      normalizedKey.includes("secret") ||
+      normalizedKey.includes("token")
+    ) {
+      continue;
+    }
+
+    stripped[key] = stripSensitivePayloadFields(entry);
+  }
+
+  return stripped;
 }
 
 function toDispatchedJob(
@@ -1580,7 +1611,9 @@ export async function createPostgresControlPlaneStore(
             request.result.jobId,
             request.result.completedAt,
             JSON.stringify(
-              sanitizePayload(decodeStoredJobPayload(storedJob.payload, jobPayloadKey))
+              stripSensitivePayloadFields(
+                decodeStoredJobPayload(storedJob.payload, jobPayloadKey)
+              )
             )
           ]
         );

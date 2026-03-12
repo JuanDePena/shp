@@ -15,7 +15,7 @@ if [[ "${mode}" != "active" && "${mode}" != "passive" ]]; then
 fi
 
 if [[ ! -d "${release_dir}" ]]; then
-  "${repo_root}/scripts/install-release.sh" "${version}"
+  bash "${repo_root}/scripts/install-release.sh" "${version}"
 fi
 
 ensure_env_version() {

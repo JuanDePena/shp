@@ -2214,8 +2214,16 @@ function createQueuedDispatchJob(
   resourceKey: string,
   resourceKind: string
 ): QueuedDispatchJob {
+  const resourceSuffix = createHash("sha256")
+    .update(resourceKey)
+    .digest("hex")
+    .slice(0, 12);
+
   return {
-    envelope,
+    envelope: {
+      ...envelope,
+      id: `${envelope.id}-${resourceSuffix}`
+    },
     resourceKey,
     resourceKind,
     payloadHash: hashDesiredPayload(envelope.payload)

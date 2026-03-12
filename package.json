@@ -11,6 +11,7 @@
   "scripts": {
     "bootstrap": "pnpm install",
     "build": "pnpm -r --if-present build",
+    "db:migrate": "pnpm --filter @simplehost/panel-database build && node packages/database/dist/migrate-cli.js",
     "start:api": "pnpm build && node apps/api/dist/index.js",
     "start:web": "pnpm build && node apps/web/dist/index.js",
     "start:worker": "pnpm build && node apps/worker/dist/index.js",

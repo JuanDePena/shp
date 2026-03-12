@@ -45,4 +45,10 @@ export function createPanelDatabaseHealthSummary(url: string): Record<string, un
   };
 }
 
+export {
+  getAppliedPanelMigrations,
+  runPanelDatabaseMigrations,
+  type PanelDatabaseMigrationPlan,
+  type PanelDatabaseMigrationRecord
+} from "./migrations.js";
 export { createPostgresControlPlaneStore, type PanelControlPlaneStore } from "./control-plane-store.js";

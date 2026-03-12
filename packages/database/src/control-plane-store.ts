@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { Pool, type PoolClient } from "pg";
 
 import {
@@ -13,39 +15,7 @@ import {
   type ReportedJobResult
 } from "@simplehost/panel-contracts";
 
-const schemaStatements = [
-  `CREATE TABLE IF NOT EXISTS control_plane_nodes (
-    node_id TEXT PRIMARY KEY,
-    hostname TEXT NOT NULL,
-    version TEXT NOT NULL,
-    supported_job_kinds JSONB NOT NULL DEFAULT '[]'::jsonb,
-    accepted_at TIMESTAMPTZ NOT NULL,
-    last_seen_at TIMESTAMPTZ NOT NULL
-  )`,
-  `CREATE TABLE IF NOT EXISTS control_plane_jobs (
-    id TEXT PRIMARY KEY,
-    desired_state_version TEXT NOT NULL,
-    kind TEXT NOT NULL,
-    node_id TEXT NOT NULL REFERENCES control_plane_nodes(node_id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ NOT NULL,
-    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-    claimed_at TIMESTAMPTZ,
-    completed_at TIMESTAMPTZ
-  )`,
-  `CREATE INDEX IF NOT EXISTS control_plane_jobs_pending_idx
-    ON control_plane_jobs (node_id, created_at)
-    WHERE claimed_at IS NULL AND completed_at IS NULL`,
-  `CREATE TABLE IF NOT EXISTS control_plane_job_results (
-    job_id TEXT PRIMARY KEY REFERENCES control_plane_jobs(id) ON DELETE CASCADE,
-    kind TEXT NOT NULL,
-    node_id TEXT NOT NULL,
-    status TEXT NOT NULL,
-    summary TEXT NOT NULL,
-    details JSONB,
-    completed_at TIMESTAMPTZ NOT NULL,
-    reported_at TIMESTAMPTZ NOT NULL
-  )`
-] as const;
+import { runPanelDatabaseMigrations } from "./migrations.js";
 
 interface NodeRow {
   node_id: string;
@@ -73,6 +43,16 @@ interface ResultRow {
   summary: string;
   details: Record<string, unknown> | null;
   completed_at: Date | string;
+}
+
+interface AuditEventInput {
+  actorType: string;
+  actorId?: string;
+  eventType: string;
+  entityType?: string;
+  entityId?: string;
+  payload?: Record<string, unknown>;
+  occurredAt?: string;
 }
 
 export interface PanelControlPlaneStore {
@@ -140,12 +120,6 @@ async function withTransaction<T>(
   }
 }
 
-async function ensureSchema(pool: Pool): Promise<void> {
-  for (const statement of schemaStatements) {
-    await pool.query(statement);
-  }
-}
-
 async function seedBootstrapJobs(client: PoolClient, nodeId: string): Promise<void> {
   const bootstrapJobs = [
     createBootstrapDispatchedJob(nodeId, "proxy.render"),
@@ -176,6 +150,35 @@ async function seedBootstrapJobs(client: PoolClient, nodeId: string): Promise<vo
   }
 }
 
+async function insertAuditEvent(
+  client: PoolClient,
+  input: AuditEventInput
+): Promise<void> {
+  await client.query(
+    `INSERT INTO shp_audit_events (
+       event_id,
+       actor_type,
+       actor_id,
+       event_type,
+       entity_type,
+       entity_id,
+       payload,
+       occurred_at
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)`,
+    [
+      randomUUID(),
+      input.actorType,
+      input.actorId ?? null,
+      input.eventType,
+      input.entityType ?? null,
+      input.entityId ?? null,
+      JSON.stringify(input.payload ?? {}),
+      input.occurredAt ?? new Date().toISOString()
+    ]
+  );
+}
+
 export async function createPostgresControlPlaneStore(
   databaseUrl: string,
   pollIntervalMs = 5000
@@ -185,7 +188,7 @@ export async function createPostgresControlPlaneStore(
     application_name: "simplehost-panel-api"
   });
 
-  await ensureSchema(pool);
+  await runPanelDatabaseMigrations(pool);
 
   return {
     async registerNode(request) {
@@ -218,6 +221,19 @@ export async function createPostgresControlPlaneStore(
         );
 
         await seedBootstrapJobs(client, request.nodeId);
+        await insertAuditEvent(client, {
+          actorType: "node",
+          actorId: request.nodeId,
+          eventType: "node.upserted",
+          entityType: "node",
+          entityId: request.nodeId,
+          payload: {
+            hostname: request.hostname,
+            version: request.version,
+            supportedJobKinds: request.supportedJobKinds
+          },
+          occurredAt: acceptedAt
+        });
       });
 
       return {
@@ -269,6 +285,21 @@ export async function createPostgresControlPlaneStore(
            ORDER BY created_at ASC`,
           [request.nodeId, request.maxJobs, claimedAt]
         );
+
+        await insertAuditEvent(client, {
+          actorType: "node",
+          actorId: request.nodeId,
+          eventType: "jobs.claimed",
+          entityType: "node",
+          entityId: request.nodeId,
+          payload: {
+            jobIds: result.rows.map((row) => row.id),
+            maxJobs: request.maxJobs,
+            hostname: request.hostname,
+            version: request.version
+          },
+          occurredAt: claimedAt
+        });
 
         return result.rows.map(toDispatchedJob);
       });
@@ -330,6 +361,20 @@ export async function createPostgresControlPlaneStore(
             reportedAt
           ]
         );
+
+        await insertAuditEvent(client, {
+          actorType: "node",
+          actorId: request.nodeId,
+          eventType: "job.reported",
+          entityType: "job",
+          entityId: request.result.jobId,
+          payload: {
+            kind: request.result.kind,
+            status: request.result.status,
+            summary: request.result.summary
+          },
+          occurredAt: reportedAt
+        });
       });
 
       return {

@@ -35,6 +35,7 @@ Useful commands:
 - `./scripts/bootstrap.sh`
 - `./scripts/bootstrap-shp-standby.sh`
 - `pnpm build`
+- `SHP_DATABASE_URL=postgresql://... pnpm db:migrate`
 - `pnpm typecheck`
 - `pnpm start:api`
 - `pnpm start:web`
@@ -63,9 +64,10 @@ The current API bootstrap now exposes a minimal control-plane loop for `SHM`:
 Current behavior:
 
 - the API persists nodes, jobs, and reported results in PostgreSQL
-- the API auto-creates the current bootstrap control-plane schema on startup
+- the API runs versioned database migrations before serving traffic
 - each newly registered node gets a small bootstrap queue
 - pending and reported job state is visible through `/v1/control-plane/state`
+- node registrations, job claims, and job reports are recorded in `shp_audit_events`
 
 ## Source of truth
 

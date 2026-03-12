@@ -1,5 +1,6 @@
+import { realpathSync } from "node:fs";
 import { createServer } from "node:http";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 import { createPanelRuntimeConfig } from "@simplehost/panel-config";
 import { createPanelApiMetadata } from "@simplehost/panel-contracts";
@@ -28,11 +29,19 @@ export function startPanelWeb(): ReturnType<typeof createServer> {
   return server;
 }
 
-const isMainModule =
-  process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(process.argv[1]).href;
+function isMainModule(): boolean {
+  if (process.argv[1] === undefined) {
+    return false;
+  }
 
-if (isMainModule) {
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return fileURLToPath(import.meta.url) === process.argv[1];
+  }
+}
+
+if (isMainModule()) {
   const server = startPanelWeb();
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {

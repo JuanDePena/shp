@@ -1,5 +1,6 @@
+import { realpathSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 import { createPanelRuntimeConfig } from "@simplehost/panel-config";
 import { createPanelApiMetadata } from "@simplehost/panel-contracts";
@@ -61,11 +62,19 @@ export async function startPanelWorker(): Promise<void> {
   } while (true);
 }
 
-const isMainModule =
-  process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(process.argv[1]).href;
+function isMainModule(): boolean {
+  if (process.argv[1] === undefined) {
+    return false;
+  }
 
-if (isMainModule) {
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return fileURLToPath(import.meta.url) === process.argv[1];
+  }
+}
+
+if (isMainModule()) {
   startPanelWorker().catch((error: unknown) => {
     console.error(error);
     process.exitCode = 1;

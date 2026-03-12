@@ -35,6 +35,9 @@ Useful commands:
 - `./scripts/bootstrap.sh`
 - `./scripts/bootstrap-shp-standby.sh`
 - `./scripts/install-release.sh`
+- `./scripts/build-release-bundle.sh`
+- `./scripts/install-bundle.sh`
+- `./scripts/rollback-release.sh`
 - `pnpm version:set -- 2603.12.00`
 - `pnpm version:today`
 - `pnpm build`
@@ -61,6 +64,7 @@ Packaged runtime artifacts:
 - `packaging/postgresql/shp/conf/postgresql.shp.standby.conf`
 - `packaging/postgresql/shp/conf/pg_hba.shp.conf`
 - `packaging/postgresql/shp/sql/create-shp-database.sql.template`
+- `packaging/rpm/simplehost-panel.spec`
 
 Operational references:
 
@@ -79,6 +83,15 @@ The current API bootstrap now exposes a minimal control-plane loop for `SHM`:
 - `POST /v1/users`
 - `GET /v1/inventory/summary`
 - `POST /v1/inventory/import`
+- `GET /v1/inventory/export`
+- `GET /v1/resources/spec`
+- `PUT /v1/resources/spec`
+- `POST /v1/reconcile/run`
+- `GET /v1/operations/overview`
+- `GET /v1/nodes/health`
+- `GET /v1/jobs/history`
+- `GET /v1/backups/summary`
+- `POST /v1/backups/runs`
 - `GET /v1/control-plane/state`
 - `POST /v1/zones/:zone/sync`
 - `POST /v1/apps/:slug/render-proxy`
@@ -91,21 +104,26 @@ The current API bootstrap now exposes a minimal control-plane loop for `SHM`:
 Current behavior:
 
 - the API persists users, sessions, imported inventory, nodes, jobs, and reported results in PostgreSQL
+- desired-state resources now live in PostgreSQL, including DNS records and backup policies
 - the API runs versioned database migrations before serving traffic
 - bootstrap admin creation can be driven by env through `SHP_BOOTSTRAP_ADMIN_*`
 - operator auth uses hashed passwords plus bearer session tokens
 - operator actions are role-gated through `platform_admin` and `platform_operator`
-- inventory import reads `/etc/spanel/inventory.apps.yaml` by default
+- inventory import reads `/etc/spanel/inventory.apps.yaml` by default, but runtime reconciliation now works from PostgreSQL
 - bootstrap inventory can still be sourced from [`/opt/simplehost/repos/simplehost-platform-config/inventory/apps.yaml`](/opt/simplehost/repos/simplehost-platform-config/inventory/apps.yaml) and copied into `/etc/spanel/inventory.apps.yaml`
-- imported inventory is normalized into tenants, nodes, zones, apps, sites, and databases
+- imported inventory is normalized into tenants, nodes, zones, DNS records, apps, sites, and databases
+- desired state can be exported back out as YAML for audit or recovery
 - `proxy.render` for `active-passive` apps now dispatches to both `primary` and `secondary`
 - API endpoints can now dispatch real `proxy.render`, `dns.sync`, `postgres.reconcile`, and `mariadb.reconcile` jobs
+- the worker now performs automatic desired-state reconciliation and dispatches only when the target payload hash changes or the previous apply failed
 - job payloads are encrypted at rest in `SHP` when `SHP_JOB_SECRET_KEY` is configured
+- desired database passwords are stored encrypted at rest when supplied through `SHP`
 - completed jobs are scrubbed so secret fields do not remain in `control_plane_jobs`
 - node enrollment requires `SHP_BOOTSTRAP_ENROLLMENT_TOKEN`
 - each enrolled node receives its own bearer token for subsequent control-plane calls
 - pending and reported job state is visible through `/v1/control-plane/state`
 - node registrations, job claims, and job reports are recorded in `shp_audit_events`
+- operations visibility is now available for node health, job history, reconciliation runs, and backup summaries
 
 ## Source of truth
 

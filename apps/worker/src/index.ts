@@ -22,9 +22,11 @@ export async function runWorkerIteration(): Promise<void> {
     defaultInventoryImportPath: config.inventory.importPath,
     jobPayloadSecret: config.jobs.payloadSecret
   });
-  const stateSnapshot = await controlPlaneStore.getStateSnapshot();
 
   try {
+    const reconciliation = await controlPlaneStore.runReconciliationCycle();
+    const stateSnapshot = await controlPlaneStore.getStateSnapshot();
+
     console.log(
       JSON.stringify(
         {
@@ -36,8 +38,10 @@ export async function runWorkerIteration(): Promise<void> {
               (count, jobs) => count + jobs.length,
               0
             ),
-            reportedResultCount: stateSnapshot.reportedResults.length
-          }
+            reportedResultCount: stateSnapshot.reportedResults.length,
+            reconciliation
+          },
+          operations: await controlPlaneStore.getOperationsOverview(null)
         },
         null,
         2

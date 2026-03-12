@@ -6,7 +6,9 @@ import { createPanelRuntimeConfig } from "@simplehost/panel-config";
 import {
   type AppReconcileRequest,
   type AuthLoginRequest,
+  type BackupRunRecordRequest,
   type CreateUserRequest,
+  type DesiredStateApplyRequest,
   type DatabaseReconcileRequest,
   type InventoryImportRequest,
   createPanelApiMetadata,
@@ -161,6 +163,93 @@ async function requestHandler(
     return;
   }
 
+  if (request.method === "GET" && url.pathname === "/v1/inventory/export") {
+    const exported = await controlPlaneStore.exportDesiredState(readBearerToken(request));
+    response.writeHead(200, {
+      "content-type": "text/yaml; charset=utf-8"
+    });
+    response.end(exported.yaml);
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/resources/spec") {
+    writeJson(
+      response,
+      200,
+      await controlPlaneStore.exportDesiredState(readBearerToken(request))
+    );
+    return;
+  }
+
+  if (request.method === "PUT" && url.pathname === "/v1/resources/spec") {
+    writeJson(
+      response,
+      200,
+      await controlPlaneStore.applyDesiredState(
+        await readJsonBody<DesiredStateApplyRequest>(request),
+        readBearerToken(request)
+      )
+    );
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/reconcile/run") {
+    writeJson(
+      response,
+      200,
+      await controlPlaneStore.runReconciliationCycle(readBearerToken(request))
+    );
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/operations/overview") {
+    writeJson(
+      response,
+      200,
+      await controlPlaneStore.getOperationsOverview(readBearerToken(request))
+    );
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/nodes/health") {
+    writeJson(response, 200, await controlPlaneStore.getNodeHealth(readBearerToken(request)));
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/jobs/history") {
+    const limit = Number.parseInt(url.searchParams.get("limit") ?? "50", 10);
+    writeJson(
+      response,
+      200,
+      await controlPlaneStore.listJobHistory(
+        readBearerToken(request),
+        Number.isInteger(limit) ? limit : 50
+      )
+    );
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/backups/summary") {
+    writeJson(
+      response,
+      200,
+      await controlPlaneStore.getBackupsOverview(readBearerToken(request))
+    );
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/backups/runs") {
+    writeJson(
+      response,
+      201,
+      await controlPlaneStore.recordBackupRun(
+        await readJsonBody<BackupRunRecordRequest>(request),
+        readBearerToken(request)
+      )
+    );
+    return;
+  }
+
   const zoneSyncMatch = matchRoute(url.pathname, /^\/v1\/zones\/([^/]+)\/sync$/);
 
   if (request.method === "POST" && zoneSyncMatch) {
@@ -275,6 +364,15 @@ async function requestHandler(
         "POST /v1/users",
         "GET /v1/inventory/summary",
         "POST /v1/inventory/import",
+        "GET /v1/inventory/export",
+        "GET /v1/resources/spec",
+        "PUT /v1/resources/spec",
+        "POST /v1/reconcile/run",
+        "GET /v1/operations/overview",
+        "GET /v1/nodes/health",
+        "GET /v1/jobs/history",
+        "GET /v1/backups/summary",
+        "POST /v1/backups/runs",
         "GET /v1/control-plane/state",
         "POST /v1/zones/:zone/sync",
         "POST /v1/apps/:slug/render-proxy",

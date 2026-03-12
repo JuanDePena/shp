@@ -7,10 +7,28 @@ import {
 } from "node:crypto";
 
 import { Pool, type PoolClient } from "pg";
+import YAML from "yaml";
 
 import {
+  type BackupRunRecordRequest,
+  type BackupRunSummary,
+  type BackupsOverview,
   createDispatchedJobEnvelope,
+  type DesiredStateApplyRequest,
+  type DesiredStateApplyResponse,
+  type DesiredStateAppInput,
+  type DesiredStateBackupPolicyInput,
+  type DesiredStateDatabaseInput,
+  type DesiredStateExportResponse,
+  type DesiredStateNodeInput,
+  type DesiredStateSpec,
+  type DesiredStateTenantInput,
+  type DesiredStateZoneInput,
+  type JobHistoryEntry,
   panelGlobalRoles,
+  type NodeHealthSnapshot,
+  type OperationsOverview,
+  type ReconciliationRunSummary,
   type AppReconcileRequest,
   type AuthLoginRequest,
   type AuthLoginResponse,
@@ -74,6 +92,9 @@ interface JobRow {
   node_id: string;
   created_at: Date | string;
   payload: Record<string, unknown>;
+  resource_key?: string | null;
+  resource_kind?: string | null;
+  payload_hash?: string | null;
 }
 
 interface ResultRow {
@@ -138,6 +159,7 @@ interface InventoryNodeRow {
 }
 
 interface InventoryZoneRow {
+  zone_id: string;
   zone_name: string;
   tenant_slug: string;
   primary_node_id: string;
@@ -158,6 +180,7 @@ interface InventoryAppRow {
 }
 
 interface InventoryDatabaseRow {
+  database_id: string;
   app_slug: string;
   engine: "postgresql" | "mariadb";
   database_name: string;
@@ -165,6 +188,7 @@ interface InventoryDatabaseRow {
   primary_node_id: string;
   standby_node_id: string | null;
   pending_migration_to: "postgresql" | "mariadb" | null;
+  desired_password: Record<string, unknown> | null;
 }
 
 interface ZoneDispatchRow {
@@ -186,11 +210,77 @@ interface AppDispatchRow {
 }
 
 interface DatabaseDispatchRow {
+  database_id: string;
   slug: string;
   engine: "postgresql" | "mariadb";
   database_name: string;
   database_user: string;
   primary_node_id: string;
+  desired_password: Record<string, unknown> | null;
+}
+
+interface InventoryRecordRow {
+  zone_name: string;
+  name: string;
+  type: "A" | "AAAA" | "CNAME" | "TXT";
+  value: string;
+  ttl: number;
+}
+
+interface BackupPolicyRow {
+  policy_slug: string;
+  tenant_slug: string;
+  target_node_id: string;
+  schedule: string;
+  retention_days: number;
+  storage_location: string;
+  resource_selectors: string[];
+}
+
+interface BackupRunRow {
+  run_id: string;
+  policy_slug: string;
+  node_id: string;
+  status: "running" | "succeeded" | "failed";
+  summary: string;
+  started_at: Date | string;
+  completed_at: Date | string | null;
+}
+
+interface ReconciliationRunRow {
+  run_id: string;
+  desired_state_version: string;
+  generated_job_count: number;
+  skipped_job_count: number;
+  missing_credential_count: number;
+  summary: Record<string, unknown>;
+  started_at: Date | string;
+  completed_at: Date | string;
+}
+
+interface JobHistoryRow {
+  id: string;
+  desired_state_version: string;
+  kind: string;
+  node_id: string;
+  created_at: Date | string;
+  claimed_at: Date | string | null;
+  completed_at: Date | string | null;
+  payload: Record<string, unknown>;
+  status: string | null;
+  summary: string | null;
+  dispatch_reason: string | null;
+  resource_key: string | null;
+}
+
+interface NodeHealthRow {
+  node_id: string;
+  hostname: string;
+  current_version: string | null;
+  last_seen_at: Date | string | null;
+  pending_job_count: number;
+  latest_job_status: string | null;
+  latest_job_summary: string | null;
 }
 
 interface AuditEventInput {
@@ -239,6 +329,13 @@ export interface PanelControlPlaneStore {
     request: InventoryImportRequest,
     presentedToken: string | null
   ): Promise<InventoryImportSummary>;
+  applyDesiredState(
+    request: DesiredStateApplyRequest,
+    presentedToken: string | null
+  ): Promise<DesiredStateApplyResponse>;
+  exportDesiredState(
+    presentedToken: string | null
+  ): Promise<DesiredStateExportResponse>;
   getInventorySnapshot(presentedToken: string | null): Promise<InventoryStateSnapshot>;
   dispatchZoneSync(
     zoneName: string,
@@ -254,6 +351,18 @@ export interface PanelControlPlaneStore {
     request: DatabaseReconcileRequest,
     presentedToken: string | null
   ): Promise<JobDispatchResponse>;
+  runReconciliationCycle(presentedToken?: string | null): Promise<ReconciliationRunSummary>;
+  getOperationsOverview(presentedToken: string | null): Promise<OperationsOverview>;
+  getNodeHealth(presentedToken: string | null): Promise<NodeHealthSnapshot[]>;
+  listJobHistory(
+    presentedToken: string | null,
+    limit?: number
+  ): Promise<JobHistoryEntry[]>;
+  getBackupsOverview(presentedToken: string | null): Promise<BackupsOverview>;
+  recordBackupRun(
+    request: BackupRunRecordRequest,
+    presentedToken: string | null
+  ): Promise<BackupRunSummary>;
   getStateSnapshot(): Promise<ControlPlaneStateSnapshot>;
   close(): Promise<void>;
 }
@@ -527,6 +636,83 @@ function toInventoryDatabaseSummary(row: InventoryDatabaseRow): InventoryDatabas
   };
 }
 
+function toBackupPolicySummary(row: BackupPolicyRow): BackupsOverview["policies"][number] {
+  return {
+    policySlug: row.policy_slug,
+    tenantSlug: row.tenant_slug,
+    targetNodeId: row.target_node_id,
+    schedule: row.schedule,
+    retentionDays: row.retention_days,
+    storageLocation: row.storage_location,
+    resourceSelectors: row.resource_selectors
+  };
+}
+
+function toBackupRunSummary(row: BackupRunRow): BackupsOverview["latestRuns"][number] {
+  return {
+    runId: row.run_id,
+    policySlug: row.policy_slug,
+    nodeId: row.node_id,
+    status: row.status,
+    summary: row.summary,
+    startedAt: normalizeTimestamp(row.started_at),
+    completedAt: row.completed_at ? normalizeTimestamp(row.completed_at) : undefined
+  };
+}
+
+function toReconciliationRunSummary(
+  row: ReconciliationRunRow
+): ReconciliationRunSummary {
+  return {
+    runId: row.run_id,
+    desiredStateVersion: row.desired_state_version,
+    startedAt: normalizeTimestamp(row.started_at),
+    completedAt: normalizeTimestamp(row.completed_at),
+    generatedJobCount: row.generated_job_count,
+    skippedJobCount: row.skipped_job_count,
+    missingCredentialCount: row.missing_credential_count,
+    jobs: Array.isArray(row.summary.jobs)
+      ? (row.summary.jobs as ReconciliationRunSummary["jobs"])
+      : []
+  };
+}
+
+function toNodeHealthSnapshot(row: NodeHealthRow): NodeHealthSnapshot {
+  return {
+    nodeId: row.node_id,
+    hostname: row.hostname,
+    desiredRole: "inventory",
+    currentVersion: row.current_version ?? undefined,
+    desiredVersion: undefined,
+    lastSeenAt: row.last_seen_at ? normalizeTimestamp(row.last_seen_at) : undefined,
+    pendingJobCount: Number(row.pending_job_count),
+    latestJobStatus: (row.latest_job_status as NodeHealthSnapshot["latestJobStatus"]) ?? undefined,
+    latestJobSummary: row.latest_job_summary ?? undefined
+  };
+}
+
+function toJobHistoryEntry(
+  row: JobHistoryRow,
+  payloadKey: Buffer | null
+): JobHistoryEntry {
+  return {
+    jobId: row.id,
+    desiredStateVersion: row.desired_state_version,
+    kind: row.kind as JobHistoryEntry["kind"],
+    nodeId: row.node_id,
+    createdAt: normalizeTimestamp(row.created_at),
+    claimedAt: row.claimed_at ? normalizeTimestamp(row.claimed_at) : undefined,
+    completedAt: row.completed_at ? normalizeTimestamp(row.completed_at) : undefined,
+    status: (row.status as JobHistoryEntry["status"]) ?? undefined,
+    summary: row.summary ?? undefined,
+    dispatchReason: row.dispatch_reason ?? undefined,
+    resourceKey: row.resource_key ?? undefined,
+    payload: sanitizePayload(
+      decodeStoredJobPayload(row.payload, payloadKey)
+    ) as Record<string, unknown>
+  };
+}
+
 function titleizeSlug(value: string): string {
   return value
     .split(/[-_]/g)
@@ -541,6 +727,30 @@ function createDesiredStateVersion(): string {
 
 function createDnsSerial(): number {
   return Math.floor(Date.now() / 1000);
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
+  }
+
+  if (!value || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  return `{${keys
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+    .join(",")}}`;
+}
+
+function hashDesiredPayload(payload: Record<string, unknown>): string {
+  return createHash("sha256").update(stableStringify(payload)).digest("hex");
+}
+
+function createStableId(prefix: string, ...parts: string[]): string {
+  return `${prefix}-${createHash("sha256").update(parts.join("\u0000")).digest("hex").slice(0, 16)}`;
 }
 
 function relativeRecordNameForZone(hostname: string, zoneName: string): string {
@@ -1035,6 +1245,7 @@ async function buildInventorySnapshot(client: PoolClient): Promise<InventoryStat
     ),
     client.query<InventoryZoneRow>(
       `SELECT
+         zones.zone_id,
          zones.zone_name,
          tenants.slug AS tenant_slug,
          zones.primary_node_id
@@ -1067,16 +1278,20 @@ async function buildInventorySnapshot(client: PoolClient): Promise<InventoryStat
     ),
     client.query<InventoryDatabaseRow>(
       `SELECT
+         databases.database_id,
          apps.slug AS app_slug,
          databases.engine,
          databases.database_name,
          databases.database_user,
          databases.primary_node_id,
          databases.standby_node_id,
-         databases.pending_migration_to
+         databases.pending_migration_to,
+         credentials.secret_payload AS desired_password
        FROM shp_databases databases
        INNER JOIN shp_apps apps
          ON apps.app_id = databases.app_id
+       LEFT JOIN shp_database_credentials credentials
+         ON credentials.database_id = databases.database_id
        ORDER BY apps.slug ASC`
     )
   ]);
@@ -1088,6 +1303,432 @@ async function buildInventorySnapshot(client: PoolClient): Promise<InventoryStat
     apps: appResult.rows.map(toInventoryAppSummary),
     databases: databaseResult.rows.map(toInventoryDatabaseSummary)
   };
+}
+
+function encodeDesiredPassword(
+  password: string,
+  key: Buffer | null
+): Record<string, unknown> {
+  return encodeStoredJobPayload({ password }, key);
+}
+
+function decodeDesiredPassword(
+  payload: Record<string, unknown> | null,
+  key: Buffer | null
+): string | null {
+  if (!payload) {
+    return null;
+  }
+
+  const decoded = decodeStoredJobPayload(payload, key);
+  return typeof decoded.password === "string" ? decoded.password : null;
+}
+
+async function buildDesiredStateSpecFromDatabase(
+  client: PoolClient
+): Promise<DesiredStateSpec> {
+  const [tenantResult, nodeResult, zoneResult, recordResult, appResult, databaseResult, backupPolicyResult] =
+    await Promise.all([
+      client.query<{ slug: string; display_name: string }>(
+        `SELECT slug, display_name
+         FROM shp_tenants
+         ORDER BY slug ASC`
+      ),
+      client.query<InventoryNodeRow>(
+        `SELECT node_id, hostname, public_ipv4, wireguard_address
+         FROM shp_nodes
+         ORDER BY node_id ASC`
+      ),
+      client.query<InventoryZoneRow>(
+        `SELECT
+           zone_id,
+           zones.zone_name,
+           tenants.slug AS tenant_slug,
+           zones.primary_node_id
+         FROM shp_dns_zones zones
+         INNER JOIN shp_tenants tenants
+           ON tenants.tenant_id = zones.tenant_id
+         ORDER BY zones.zone_name ASC`
+      ),
+      client.query<InventoryRecordRow>(
+        `SELECT
+           zones.zone_name,
+           records.name,
+           records.type,
+           records.value,
+           records.ttl
+         FROM shp_dns_records records
+         INNER JOIN shp_dns_zones zones
+           ON zones.zone_id = records.zone_id
+         ORDER BY zones.zone_name ASC, records.name ASC, records.type ASC, records.value ASC`
+      ),
+      client.query<InventoryAppRow>(
+        `SELECT
+           apps.slug,
+           tenants.slug AS tenant_slug,
+           zones.zone_name,
+           apps.primary_node_id,
+           apps.standby_node_id,
+           sites.canonical_domain,
+           sites.aliases,
+           apps.backend_port,
+           apps.runtime_image,
+           apps.storage_root,
+           apps.mode
+         FROM shp_apps apps
+         INNER JOIN shp_tenants tenants
+           ON tenants.tenant_id = apps.tenant_id
+         INNER JOIN shp_dns_zones zones
+           ON zones.zone_id = apps.zone_id
+         INNER JOIN shp_sites sites
+           ON sites.app_id = apps.app_id
+         ORDER BY apps.slug ASC`
+      ),
+      client.query<InventoryDatabaseRow>(
+        `SELECT
+           databases.database_id,
+           apps.slug AS app_slug,
+           databases.engine,
+           databases.database_name,
+           databases.database_user,
+           databases.primary_node_id,
+           databases.standby_node_id,
+           databases.pending_migration_to,
+           credentials.secret_payload AS desired_password
+         FROM shp_databases databases
+         INNER JOIN shp_apps apps
+           ON apps.app_id = databases.app_id
+         LEFT JOIN shp_database_credentials credentials
+           ON credentials.database_id = databases.database_id
+         ORDER BY apps.slug ASC`
+      ),
+      client.query<BackupPolicyRow>(
+        `SELECT
+           policies.policy_slug,
+           tenants.slug AS tenant_slug,
+           policies.target_node_id,
+           policies.schedule,
+           policies.retention_days,
+           policies.storage_location,
+           policies.resource_selectors
+         FROM shp_backup_policies policies
+         INNER JOIN shp_tenants tenants
+           ON tenants.tenant_id = policies.tenant_id
+         ORDER BY policies.policy_slug ASC`
+      )
+    ]);
+
+  const recordsByZone = new Map<string, DnsRecordPayload[]>();
+
+  for (const row of recordResult.rows) {
+    const records = recordsByZone.get(row.zone_name) ?? [];
+    records.push({
+      name: row.name,
+      type: row.type,
+      value: row.value,
+      ttl: row.ttl
+    });
+    recordsByZone.set(row.zone_name, records);
+  }
+
+  return {
+    tenants: tenantResult.rows.map((row) => ({
+      slug: row.slug,
+      displayName: row.display_name
+    })),
+    nodes: nodeResult.rows.map((row) => toInventoryNodeSummary(row)),
+    zones: zoneResult.rows.map((row) => ({
+      zoneName: row.zone_name,
+      tenantSlug: row.tenant_slug,
+      primaryNodeId: row.primary_node_id,
+      records: normalizeDnsRecords(recordsByZone.get(row.zone_name) ?? [])
+    })),
+    apps: appResult.rows.map((row) => ({
+      slug: row.slug,
+      tenantSlug: row.tenant_slug,
+      zoneName: row.zone_name,
+      primaryNodeId: row.primary_node_id,
+      standbyNodeId: row.standby_node_id ?? undefined,
+      canonicalDomain: row.canonical_domain,
+      aliases: row.aliases,
+      backendPort: row.backend_port,
+      runtimeImage: row.runtime_image,
+      storageRoot: row.storage_root,
+      mode: row.mode
+    })),
+    databases: databaseResult.rows.map((row) => ({
+      appSlug: row.app_slug,
+      engine: row.engine,
+      databaseName: row.database_name,
+      databaseUser: row.database_user,
+      primaryNodeId: row.primary_node_id,
+      standbyNodeId: row.standby_node_id ?? undefined,
+      pendingMigrationTo: row.pending_migration_to ?? undefined
+    })),
+    backupPolicies: backupPolicyResult.rows.map((row) => ({
+      policySlug: row.policy_slug,
+      tenantSlug: row.tenant_slug,
+      targetNodeId: row.target_node_id,
+      schedule: row.schedule,
+      retentionDays: row.retention_days,
+      storageLocation: row.storage_location,
+      resourceSelectors: row.resource_selectors
+    }))
+  };
+}
+
+async function applyDesiredStateSpec(
+  client: PoolClient,
+  spec: DesiredStateSpec,
+  payloadKey: Buffer | null
+): Promise<void> {
+  for (const tenant of spec.tenants) {
+    await client.query(
+      `INSERT INTO shp_tenants (
+         tenant_id,
+         slug,
+         display_name,
+         created_at,
+         updated_at
+       )
+       VALUES ($1, $2, $3, NOW(), NOW())
+       ON CONFLICT (slug)
+       DO UPDATE SET
+         display_name = EXCLUDED.display_name,
+         updated_at = EXCLUDED.updated_at`,
+      [`tenant-${tenant.slug}`, tenant.slug, tenant.displayName]
+    );
+  }
+
+  for (const node of spec.nodes) {
+    await client.query(
+      `INSERT INTO shp_nodes (
+         node_id,
+         hostname,
+         public_ipv4,
+         wireguard_address,
+         created_at,
+         updated_at
+       )
+       VALUES ($1, $2, $3, $4, NOW(), NOW())
+       ON CONFLICT (node_id)
+       DO UPDATE SET
+         hostname = EXCLUDED.hostname,
+         public_ipv4 = EXCLUDED.public_ipv4,
+         wireguard_address = EXCLUDED.wireguard_address,
+         updated_at = EXCLUDED.updated_at`,
+      [node.nodeId, node.hostname, node.publicIpv4, node.wireguardAddress]
+    );
+  }
+
+  for (const zone of spec.zones) {
+    const zoneId = `zone-${zone.zoneName}`;
+
+    await client.query(
+      `INSERT INTO shp_dns_zones (
+         zone_id,
+         tenant_id,
+         zone_name,
+         primary_node_id,
+         created_at,
+         updated_at
+       )
+       VALUES ($1, $2, $3, $4, NOW(), NOW())
+       ON CONFLICT (zone_name)
+       DO UPDATE SET
+         tenant_id = EXCLUDED.tenant_id,
+         primary_node_id = EXCLUDED.primary_node_id,
+         updated_at = EXCLUDED.updated_at`,
+      [zoneId, `tenant-${zone.tenantSlug}`, zone.zoneName, zone.primaryNodeId]
+    );
+
+    await client.query(`DELETE FROM shp_dns_records WHERE zone_id = $1`, [zoneId]);
+
+    for (const record of normalizeDnsRecords(zone.records)) {
+      await client.query(
+        `INSERT INTO shp_dns_records (
+           record_id,
+           zone_id,
+           name,
+           type,
+           value,
+           ttl,
+           created_at,
+           updated_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+         ON CONFLICT (zone_id, name, type, value)
+         DO UPDATE SET
+           ttl = EXCLUDED.ttl,
+           updated_at = EXCLUDED.updated_at`,
+        [
+          createStableId("record", zone.zoneName, record.name, record.type, record.value),
+          zoneId,
+          record.name,
+          record.type,
+          record.value,
+          record.ttl
+        ]
+      );
+    }
+  }
+
+  for (const app of spec.apps) {
+    const appId = `app-${app.slug}`;
+
+    await client.query(
+      `INSERT INTO shp_apps (
+         app_id,
+         tenant_id,
+         zone_id,
+         primary_node_id,
+         standby_node_id,
+         slug,
+         runtime_image,
+         backend_port,
+         storage_root,
+         mode,
+         created_at,
+         updated_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+       ON CONFLICT (slug)
+       DO UPDATE SET
+         tenant_id = EXCLUDED.tenant_id,
+         zone_id = EXCLUDED.zone_id,
+         primary_node_id = EXCLUDED.primary_node_id,
+         standby_node_id = EXCLUDED.standby_node_id,
+         runtime_image = EXCLUDED.runtime_image,
+         backend_port = EXCLUDED.backend_port,
+         storage_root = EXCLUDED.storage_root,
+         mode = EXCLUDED.mode,
+         updated_at = EXCLUDED.updated_at`,
+      [
+        appId,
+        `tenant-${app.tenantSlug}`,
+        `zone-${app.zoneName}`,
+        app.primaryNodeId,
+        app.standbyNodeId ?? null,
+        app.slug,
+        app.runtimeImage,
+        app.backendPort,
+        app.storageRoot,
+        app.mode
+      ]
+    );
+
+    await client.query(
+      `INSERT INTO shp_sites (
+         site_id,
+         app_id,
+         canonical_domain,
+         aliases,
+         created_at,
+         updated_at
+       )
+       VALUES ($1, $2, $3, $4::jsonb, NOW(), NOW())
+       ON CONFLICT (canonical_domain)
+       DO UPDATE SET
+         app_id = EXCLUDED.app_id,
+         aliases = EXCLUDED.aliases,
+         updated_at = EXCLUDED.updated_at`,
+      [`site-${app.slug}`, appId, app.canonicalDomain, JSON.stringify(app.aliases)]
+    );
+  }
+
+  for (const database of spec.databases) {
+    const databaseId = `database-${database.appSlug}`;
+
+    await client.query(
+      `INSERT INTO shp_databases (
+         database_id,
+         app_id,
+         primary_node_id,
+         standby_node_id,
+         engine,
+         database_name,
+         database_user,
+         pending_migration_to,
+         created_at,
+         updated_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+       ON CONFLICT (engine, database_name)
+       DO UPDATE SET
+         app_id = EXCLUDED.app_id,
+         primary_node_id = EXCLUDED.primary_node_id,
+         standby_node_id = EXCLUDED.standby_node_id,
+         database_user = EXCLUDED.database_user,
+         pending_migration_to = EXCLUDED.pending_migration_to,
+         updated_at = EXCLUDED.updated_at`,
+      [
+        databaseId,
+        `app-${database.appSlug}`,
+        database.primaryNodeId,
+        database.standbyNodeId ?? null,
+        database.engine,
+        database.databaseName,
+        database.databaseUser,
+        database.pendingMigrationTo ?? null
+      ]
+    );
+
+    if (database.desiredPassword) {
+      await client.query(
+        `INSERT INTO shp_database_credentials (
+           database_id,
+           secret_payload,
+           updated_at
+         )
+         VALUES ($1, $2::jsonb, NOW())
+         ON CONFLICT (database_id)
+         DO UPDATE SET
+           secret_payload = EXCLUDED.secret_payload,
+           updated_at = EXCLUDED.updated_at`,
+        [
+          databaseId,
+          JSON.stringify(encodeDesiredPassword(database.desiredPassword, payloadKey))
+        ]
+      );
+    }
+  }
+
+  for (const policy of spec.backupPolicies) {
+    await client.query(
+      `INSERT INTO shp_backup_policies (
+         policy_id,
+         tenant_id,
+         target_node_id,
+         policy_slug,
+         schedule,
+         retention_days,
+         storage_location,
+         resource_selectors,
+         created_at,
+         updated_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, NOW(), NOW())
+       ON CONFLICT (policy_slug)
+       DO UPDATE SET
+         tenant_id = EXCLUDED.tenant_id,
+         target_node_id = EXCLUDED.target_node_id,
+         schedule = EXCLUDED.schedule,
+         retention_days = EXCLUDED.retention_days,
+         storage_location = EXCLUDED.storage_location,
+         resource_selectors = EXCLUDED.resource_selectors,
+         updated_at = EXCLUDED.updated_at`,
+      [
+        `backup-policy-${policy.policySlug}`,
+        `tenant-${policy.tenantSlug}`,
+        policy.targetNodeId,
+        policy.policySlug,
+        policy.schedule,
+        policy.retentionDays,
+        policy.storageLocation,
+        JSON.stringify(policy.resourceSelectors)
+      ]
+    );
+  }
 }
 
 function buildZoneRecords(
@@ -1157,6 +1798,130 @@ function resolveDatabaseStandbyNodeId(
     : inventory.platform.mariadb_apps.replica_node;
 }
 
+function normalizeDnsRecords(records: DnsRecordPayload[]): DnsRecordPayload[] {
+  const unique = new Map<string, DnsRecordPayload>();
+
+  for (const record of records) {
+    const key = `${record.name}:${record.type}:${record.value}:${record.ttl}`;
+
+    if (!unique.has(key)) {
+      unique.set(key, {
+        name: record.name,
+        type: record.type,
+        value: record.value,
+        ttl: record.ttl
+      });
+    }
+  }
+
+  return [...unique.values()].sort((left, right) =>
+    `${left.name}:${left.type}:${left.value}:${left.ttl}`.localeCompare(
+      `${right.name}:${right.type}:${right.value}:${right.ttl}`
+    )
+  );
+}
+
+function buildDesiredStateSpecFromInventory(
+  inventory: PlatformInventoryDocument
+): DesiredStateSpec {
+  const tenants: DesiredStateTenantInput[] = [
+    ...new Map(
+      inventory.apps.map((app) => [
+        app.client,
+        {
+          slug: app.client,
+          displayName: titleizeSlug(app.client)
+        } satisfies DesiredStateTenantInput
+      ])
+    ).values()
+  ].sort((left, right) => left.slug.localeCompare(right.slug));
+  const nodes: DesiredStateNodeInput[] = Object.entries(inventory.nodes)
+    .map(([nodeId, node]) => ({
+      nodeId,
+      hostname: node.hostname,
+      publicIpv4: node.public_ipv4,
+      wireguardAddress: node.wireguard_address
+    }))
+    .sort((left, right) => left.nodeId.localeCompare(right.nodeId));
+  const apps: DesiredStateAppInput[] = inventory.apps
+    .map((app) => ({
+      slug: app.slug,
+      tenantSlug: app.client,
+      zoneName: app.zone,
+      primaryNodeId: resolveAppPrimaryNodeId(inventory, app),
+      standbyNodeId: resolveAppStandbyNodeId(inventory, app) ?? undefined,
+      canonicalDomain: app.canonical_domain,
+      aliases: app.aliases,
+      backendPort: app.backend_port,
+      runtimeImage: app.runtime_image,
+      storageRoot: app.storage_root,
+      mode: app.mode
+    }))
+    .sort((left, right) => left.slug.localeCompare(right.slug));
+  const zones: DesiredStateZoneInput[] = [...new Set(inventory.apps.map((app) => app.zone))]
+    .map((zoneName) => {
+      const zoneApps = inventory.apps.filter((app) => app.zone === zoneName);
+      const primaryNodeId = resolveDefaultPrimaryNodeId(inventory);
+      const publicIpv4 = inventory.nodes[primaryNodeId]?.public_ipv4;
+
+      return {
+        zoneName,
+        tenantSlug: zoneApps[0]!.client,
+        primaryNodeId,
+        records: normalizeDnsRecords(
+          publicIpv4
+            ? buildZoneRecords(
+                zoneName,
+                publicIpv4,
+                zoneApps.map((app) => ({
+                  canonical_domain: app.canonical_domain,
+                  aliases: app.aliases
+                }))
+              )
+            : []
+        )
+      };
+    })
+    .sort((left, right) => left.zoneName.localeCompare(right.zoneName));
+  const databases: DesiredStateDatabaseInput[] = inventory.apps
+    .map((app) => ({
+      appSlug: app.slug,
+      engine: app.database.engine,
+      databaseName: app.database.name,
+      databaseUser: app.database.user,
+      primaryNodeId:
+        app.database.engine === "postgresql"
+          ? inventory.platform.postgresql_apps.primary_node
+          : inventory.platform.mariadb_apps.primary_node,
+      standbyNodeId: resolveDatabaseStandbyNodeId(inventory, app) ?? undefined,
+      pendingMigrationTo: app.database.pending_migration_to
+    }))
+    .sort((left, right) => left.appSlug.localeCompare(right.appSlug));
+
+  return {
+    tenants,
+    nodes,
+    zones,
+    apps,
+    databases,
+    backupPolicies: []
+  };
+}
+
+function summarizeDesiredStateSpec(
+  spec: DesiredStateSpec
+): DesiredStateApplyResponse["summary"] {
+  return {
+    tenantCount: spec.tenants.length,
+    nodeCount: spec.nodes.length,
+    zoneCount: spec.zones.length,
+    recordCount: spec.zones.reduce((count, zone) => count + zone.records.length, 0),
+    appCount: spec.apps.length,
+    databaseCount: spec.databases.length,
+    backupPolicyCount: spec.backupPolicies.length
+  };
+}
+
 async function buildZoneDnsPayload(
   client: PoolClient,
   zoneName: string
@@ -1178,18 +1943,18 @@ async function buildZoneDnsPayload(
     throw new Error(`Zone ${zoneName} does not exist in SHP inventory.`);
   }
 
-  const siteResult = await client.query<{
-    canonical_domain: string;
-    aliases: string[];
-  }>(
-    `SELECT sites.canonical_domain, sites.aliases
-     FROM shp_sites sites
-     INNER JOIN shp_apps apps
-       ON apps.app_id = sites.app_id
+  const recordResult = await client.query<InventoryRecordRow>(
+    `SELECT
+       zones.zone_name,
+       records.name,
+       records.type,
+       records.value,
+       records.ttl
+     FROM shp_dns_records records
      INNER JOIN shp_dns_zones zones
-       ON zones.zone_id = apps.zone_id
+       ON zones.zone_id = records.zone_id
      WHERE zones.zone_name = $1
-     ORDER BY sites.canonical_domain ASC`,
+     ORDER BY records.name ASC, records.type ASC, records.value ASC`,
     [zoneName]
   );
 
@@ -1199,7 +1964,17 @@ async function buildZoneDnsPayload(
       zoneName,
       serial: createDnsSerial(),
       nameservers: [`ns1.${zoneName}`, `ns2.${zoneName}`],
-      records: buildZoneRecords(zoneName, zone.public_ipv4, siteResult.rows)
+      records:
+        recordResult.rows.length > 0
+          ? normalizeDnsRecords(
+              recordResult.rows.map((row) => ({
+                name: row.name,
+                type: row.type,
+                value: row.value,
+                ttl: row.ttl
+              }))
+            )
+          : buildZoneRecords(zoneName, zone.public_ipv4, [])
     }
   };
 }
@@ -1270,7 +2045,8 @@ async function buildProxyPayload(
 async function buildDatabasePayload(
   client: PoolClient,
   appSlug: string,
-  password: string
+  password: string | null,
+  payloadKey: Buffer | null
 ): Promise<{
   nodeId: string;
   kind: "postgres.reconcile" | "mariadb.reconcile";
@@ -1279,13 +2055,17 @@ async function buildDatabasePayload(
   const result = await client.query<DatabaseDispatchRow>(
     `SELECT
        apps.slug,
+       databases.database_id,
        databases.engine,
        databases.database_name,
        databases.database_user,
-       databases.primary_node_id
+       databases.primary_node_id,
+       credentials.secret_payload AS desired_password
      FROM shp_databases databases
      INNER JOIN shp_apps apps
        ON apps.app_id = databases.app_id
+     LEFT JOIN shp_database_credentials credentials
+       ON credentials.database_id = databases.database_id
      WHERE apps.slug = $1`,
     [appSlug]
   );
@@ -1293,6 +2073,15 @@ async function buildDatabasePayload(
 
   if (!database) {
     throw new Error(`Database for application ${appSlug} does not exist in SHP inventory.`);
+  }
+
+  const desiredPassword =
+    password ?? decodeDesiredPassword(database.desired_password, payloadKey);
+
+  if (!desiredPassword) {
+    throw new Error(
+      `Database ${database.database_name} does not have a desired password stored in SHP.`
+    );
   }
 
   if (database.engine === "postgresql") {
@@ -1303,7 +2092,7 @@ async function buildDatabasePayload(
         appSlug: database.slug,
         databaseName: database.database_name,
         roleName: database.database_user,
-        password
+        password: desiredPassword
       }
     };
   }
@@ -1315,7 +2104,7 @@ async function buildDatabasePayload(
       appSlug: database.slug,
       databaseName: database.database_name,
       userName: database.database_user,
-      password
+      password: desiredPassword
     }
   };
 }
@@ -1352,16 +2141,23 @@ async function ensureControlPlaneTargetNode(
   );
 }
 
+interface QueuedDispatchJob {
+  envelope: DispatchedJobEnvelope;
+  resourceKey: string;
+  resourceKind: string;
+  payloadHash: string;
+}
+
 async function insertDispatchedJobs(
   client: PoolClient,
-  jobs: DispatchedJobEnvelope[],
-  actorUserId: string,
+  jobs: QueuedDispatchJob[],
+  actorUserId: string | null,
   dispatchReason: string,
   payloadKey: Buffer | null
 ): Promise<void> {
   const createdAt = new Date().toISOString();
 
-  for (const nodeId of new Set(jobs.map((job) => job.nodeId))) {
+  for (const nodeId of new Set(jobs.map((job) => job.envelope.nodeId))) {
     await ensureControlPlaneTargetNode(client, nodeId, createdAt);
   }
 
@@ -1375,35 +2171,212 @@ async function insertDispatchedJobs(
          created_at,
          payload,
          dispatched_by_user_id,
-         dispatch_reason
+         dispatch_reason,
+         resource_key,
+         resource_kind,
+         payload_hash
        )
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11)`,
       [
-        job.id,
-        job.desiredStateVersion,
-        job.kind,
-        job.nodeId,
-        job.createdAt,
-        JSON.stringify(encodeStoredJobPayload(job.payload, payloadKey)),
+        job.envelope.id,
+        job.envelope.desiredStateVersion,
+        job.envelope.kind,
+        job.envelope.nodeId,
+        job.envelope.createdAt,
+        JSON.stringify(encodeStoredJobPayload(job.envelope.payload, payloadKey)),
         actorUserId,
-        dispatchReason
+        dispatchReason,
+        job.resourceKey,
+        job.resourceKind,
+        job.payloadHash
       ]
     );
 
     await insertAuditEvent(client, {
-      actorType: "user",
-      actorId: actorUserId,
+      actorType: actorUserId ? "user" : "system",
+      actorId: actorUserId ?? "reconciler",
       eventType: "job.dispatched",
       entityType: "job",
-      entityId: job.id,
+      entityId: job.envelope.id,
       payload: {
-        kind: job.kind,
-        nodeId: job.nodeId,
-        dispatchReason
+        kind: job.envelope.kind,
+        nodeId: job.envelope.nodeId,
+        dispatchReason,
+        resourceKey: job.resourceKey
       },
-      occurredAt: job.createdAt
+      occurredAt: job.envelope.createdAt
     });
   }
+}
+
+function createQueuedDispatchJob(
+  envelope: DispatchedJobEnvelope,
+  resourceKey: string,
+  resourceKind: string
+): QueuedDispatchJob {
+  return {
+    envelope,
+    resourceKey,
+    resourceKind,
+    payloadHash: hashDesiredPayload(envelope.payload)
+  };
+}
+
+async function shouldDispatchQueuedJob(
+  client: PoolClient,
+  job: QueuedDispatchJob
+): Promise<boolean> {
+  const result = await client.query<{
+    payload_hash: string | null;
+    completed_at: Date | string | null;
+    status: string | null;
+  }>(
+    `SELECT
+       jobs.payload_hash,
+       jobs.completed_at,
+       results.status
+     FROM control_plane_jobs jobs
+     LEFT JOIN control_plane_job_results results
+       ON results.job_id = jobs.id
+     WHERE jobs.node_id = $1
+       AND jobs.kind = $2
+       AND jobs.resource_key = $3
+     ORDER BY jobs.created_at DESC
+     LIMIT 1`,
+    [job.envelope.nodeId, job.envelope.kind, job.resourceKey]
+  );
+  const latest = result.rows[0];
+
+  if (!latest) {
+    return true;
+  }
+
+  if (!latest.completed_at) {
+    return latest.payload_hash !== job.payloadHash;
+  }
+
+  if (latest.payload_hash !== job.payloadHash) {
+    return true;
+  }
+
+  return latest.status !== "applied";
+}
+
+async function getLatestReconciliationRun(
+  client: PoolClient
+): Promise<ReconciliationRunSummary | null> {
+  const result = await client.query<ReconciliationRunRow>(
+    `SELECT
+       run_id,
+       desired_state_version,
+       generated_job_count,
+       skipped_job_count,
+       missing_credential_count,
+       summary,
+       started_at,
+       completed_at
+     FROM shp_reconciliation_runs
+     ORDER BY completed_at DESC
+     LIMIT 1`
+  );
+
+  return result.rows[0] ? toReconciliationRunSummary(result.rows[0]) : null;
+}
+
+async function buildReconciliationCandidates(
+  client: PoolClient,
+  payloadKey: Buffer | null,
+  desiredStateVersion: string
+): Promise<{ jobs: QueuedDispatchJob[]; missingCredentialCount: number }> {
+  const jobs: QueuedDispatchJob[] = [];
+  let missingCredentialCount = 0;
+  const zoneResult = await client.query<{ zone_name: string }>(
+    `SELECT zone_name
+     FROM shp_dns_zones
+     ORDER BY zone_name ASC`
+  );
+
+  for (const row of zoneResult.rows) {
+    const plan = await buildZoneDnsPayload(client, row.zone_name);
+    jobs.push(
+      createQueuedDispatchJob(
+        createDispatchedJobEnvelope(
+          "dns.sync",
+          plan.nodeId,
+          desiredStateVersion,
+          plan.payload as unknown as Record<string, unknown>
+        ),
+        `zone:${row.zone_name}`,
+        "dns"
+      )
+    );
+  }
+
+  const appResult = await client.query<{ slug: string }>(
+    `SELECT slug
+     FROM shp_apps
+     ORDER BY slug ASC`
+  );
+
+  for (const row of appResult.rows) {
+    const plan = await buildProxyPayload(client, row.slug);
+
+    for (const target of plan.plans) {
+      jobs.push(
+        createQueuedDispatchJob(
+          createDispatchedJobEnvelope(
+            "proxy.render",
+            target.nodeId,
+            desiredStateVersion,
+            target.payload as unknown as Record<string, unknown>
+          ),
+          `app:${row.slug}:proxy:${target.nodeId}`,
+          "site"
+        )
+      );
+    }
+  }
+
+  const databaseResult = await client.query<{ slug: string }>(
+    `SELECT apps.slug
+     FROM shp_databases databases
+     INNER JOIN shp_apps apps
+       ON apps.app_id = databases.app_id
+     ORDER BY apps.slug ASC`
+  );
+
+  for (const row of databaseResult.rows) {
+    try {
+      const plan = await buildDatabasePayload(client, row.slug, null, payloadKey);
+      jobs.push(
+        createQueuedDispatchJob(
+          createDispatchedJobEnvelope(
+            plan.kind,
+            plan.nodeId,
+            desiredStateVersion,
+            plan.payload
+          ),
+          `database:${row.slug}`,
+          "database"
+        )
+      );
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.includes("does not have a desired password stored in SHP")
+      ) {
+        missingCredentialCount += 1;
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  return {
+    jobs,
+    missingCredentialCount
+  };
 }
 
 export async function createPostgresControlPlaneStore(
@@ -1818,6 +2791,7 @@ export async function createPostgresControlPlaneStore(
     async importInventory(request, presentedToken) {
       const sourcePath = request.path?.trim() || options.defaultInventoryImportPath;
       const inventory = await readPlatformInventory(sourcePath);
+      const desiredStateSpec = buildDesiredStateSpecFromInventory(inventory);
       const importedAt = new Date().toISOString();
       const importId = `import-${randomUUID()}`;
 
@@ -1826,201 +2800,15 @@ export async function createPostgresControlPlaneStore(
           "platform_admin",
           "platform_operator"
         ]);
-
-        const zoneOwners = new Map<string, string>();
-
-        for (const app of inventory.apps) {
-          const owner = zoneOwners.get(app.zone);
-
-          if (owner && owner !== app.client) {
-            throw new Error(
-              `Zone ${app.zone} is assigned to both ${owner} and ${app.client}.`
-            );
-          }
-
-          zoneOwners.set(app.zone, app.client);
-        }
-
-        for (const [nodeId, node] of Object.entries(inventory.nodes)) {
-          await client.query(
-            `INSERT INTO shp_nodes (
-               node_id,
-               hostname,
-               public_ipv4,
-               wireguard_address,
-               created_at,
-               updated_at
-             )
-             VALUES ($1, $2, $3, $4, NOW(), NOW())
-             ON CONFLICT (node_id)
-             DO UPDATE SET
-               hostname = EXCLUDED.hostname,
-               public_ipv4 = EXCLUDED.public_ipv4,
-               wireguard_address = EXCLUDED.wireguard_address,
-               updated_at = EXCLUDED.updated_at`,
-            [nodeId, node.hostname, node.public_ipv4, node.wireguard_address]
-          );
-        }
-
-        for (const tenantSlug of new Set(inventory.apps.map((app) => app.client))) {
-          const tenantId = `tenant-${tenantSlug}`;
-
-          await client.query(
-            `INSERT INTO shp_tenants (
-               tenant_id,
-               slug,
-               display_name,
-               created_at,
-               updated_at
-             )
-             VALUES ($1, $2, $3, NOW(), NOW())
-             ON CONFLICT (slug)
-             DO UPDATE SET
-               display_name = EXCLUDED.display_name,
-               updated_at = EXCLUDED.updated_at`,
-            [tenantId, tenantSlug, titleizeSlug(tenantSlug)]
-          );
-        }
-
-        for (const [zoneName, tenantSlug] of zoneOwners) {
-          const tenantId = `tenant-${tenantSlug}`;
-
-          await client.query(
-            `INSERT INTO shp_dns_zones (
-               zone_id,
-               tenant_id,
-               zone_name,
-               primary_node_id,
-               created_at,
-               updated_at
-             )
-             VALUES ($1, $2, $3, $4, NOW(), NOW())
-             ON CONFLICT (zone_name)
-             DO UPDATE SET
-               tenant_id = EXCLUDED.tenant_id,
-               primary_node_id = EXCLUDED.primary_node_id,
-               updated_at = EXCLUDED.updated_at`,
-            [
-              `zone-${zoneName}`,
-              tenantId,
-              zoneName,
-              resolveDefaultPrimaryNodeId(inventory)
-            ]
-          );
-        }
-
-        for (const app of inventory.apps) {
-          const appId = `app-${app.slug}`;
-          const appPrimaryNodeId = resolveAppPrimaryNodeId(inventory, app);
-          const appStandbyNodeId = resolveAppStandbyNodeId(inventory, app);
-
-          await client.query(
-            `INSERT INTO shp_apps (
-               app_id,
-               tenant_id,
-               zone_id,
-               primary_node_id,
-               standby_node_id,
-               slug,
-               runtime_image,
-               backend_port,
-             storage_root,
-               mode,
-               created_at,
-               updated_at
-             )
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
-             ON CONFLICT (slug)
-             DO UPDATE SET
-               tenant_id = EXCLUDED.tenant_id,
-               zone_id = EXCLUDED.zone_id,
-               primary_node_id = EXCLUDED.primary_node_id,
-               standby_node_id = EXCLUDED.standby_node_id,
-               runtime_image = EXCLUDED.runtime_image,
-               backend_port = EXCLUDED.backend_port,
-               storage_root = EXCLUDED.storage_root,
-               mode = EXCLUDED.mode,
-               updated_at = EXCLUDED.updated_at`,
-            [
-              appId,
-              `tenant-${app.client}`,
-              `zone-${app.zone}`,
-              appPrimaryNodeId,
-              appStandbyNodeId,
-              app.slug,
-              app.runtime_image,
-              app.backend_port,
-              app.storage_root,
-              app.mode
-            ]
-          );
-
-          await client.query(
-            `INSERT INTO shp_sites (
-               site_id,
-               app_id,
-               canonical_domain,
-               aliases,
-               created_at,
-               updated_at
-             )
-             VALUES ($1, $2, $3, $4::jsonb, NOW(), NOW())
-             ON CONFLICT (canonical_domain)
-             DO UPDATE SET
-               app_id = EXCLUDED.app_id,
-               aliases = EXCLUDED.aliases,
-               updated_at = EXCLUDED.updated_at`,
-            [`site-${app.slug}`, appId, app.canonical_domain, JSON.stringify(app.aliases)]
-          );
-
-          const databasePrimaryNodeId =
-            app.database.engine === "postgresql"
-              ? inventory.platform.postgresql_apps.primary_node
-              : inventory.platform.mariadb_apps.primary_node;
-          const databaseStandbyNodeId = resolveDatabaseStandbyNodeId(inventory, app);
-
-          await client.query(
-            `INSERT INTO shp_databases (
-               database_id,
-               app_id,
-               primary_node_id,
-               standby_node_id,
-               engine,
-               database_name,
-             database_user,
-               pending_migration_to,
-               created_at,
-               updated_at
-             )
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
-             ON CONFLICT (engine, database_name)
-             DO UPDATE SET
-               app_id = EXCLUDED.app_id,
-               primary_node_id = EXCLUDED.primary_node_id,
-               standby_node_id = EXCLUDED.standby_node_id,
-               database_user = EXCLUDED.database_user,
-               pending_migration_to = EXCLUDED.pending_migration_to,
-               updated_at = EXCLUDED.updated_at`,
-            [
-              `database-${app.slug}`,
-              appId,
-              databasePrimaryNodeId,
-              databaseStandbyNodeId,
-              app.database.engine,
-              app.database.name,
-              app.database.user,
-              app.database.pending_migration_to ?? null
-            ]
-          );
-        }
-
+        await applyDesiredStateSpec(client, desiredStateSpec, jobPayloadKey);
+        const desiredSummary = summarizeDesiredStateSpec(desiredStateSpec);
         const summary = {
-          tenantCount: new Set(inventory.apps.map((app) => app.client)).size,
-          nodeCount: Object.keys(inventory.nodes).length,
-          zoneCount: zoneOwners.size,
-          appCount: inventory.apps.length,
-          siteCount: inventory.apps.length,
-          databaseCount: inventory.apps.length
+          tenantCount: desiredSummary.tenantCount,
+          nodeCount: desiredSummary.nodeCount,
+          zoneCount: desiredSummary.zoneCount,
+          appCount: desiredSummary.appCount,
+          siteCount: desiredSummary.appCount,
+          databaseCount: desiredSummary.databaseCount
         };
 
         await client.query(
@@ -2067,6 +2855,56 @@ export async function createPostgresControlPlaneStore(
       });
     },
 
+    async applyDesiredState(request, presentedToken) {
+      const appliedAt = new Date().toISOString();
+      const desiredStateVersion = createDesiredStateVersion();
+
+      return withTransaction(pool, async (client) => {
+        const actor = await requireAuthorizedUser(client, presentedToken, [
+          "platform_admin",
+          "platform_operator"
+        ]);
+        await applyDesiredStateSpec(client, request.spec, jobPayloadKey);
+        const summary = summarizeDesiredStateSpec(request.spec);
+
+        await insertAuditEvent(client, {
+          actorType: "user",
+          actorId: actor.userId,
+          eventType: "desired_state.applied",
+          entityType: "desired_state",
+          entityId: desiredStateVersion,
+          payload: {
+            summary,
+            reason: request.reason ?? null
+          },
+          occurredAt: appliedAt
+        });
+
+        return {
+          appliedAt,
+          desiredStateVersion,
+          summary
+        };
+      });
+    },
+
+    async exportDesiredState(presentedToken) {
+      return withTransaction(pool, async (client) => {
+        await requireAuthorizedUser(client, presentedToken, [
+          "platform_admin",
+          "platform_operator"
+        ]);
+
+        const spec = await buildDesiredStateSpecFromDatabase(client);
+
+        return {
+          exportedAt: new Date().toISOString(),
+          spec,
+          yaml: YAML.stringify(spec)
+        };
+      });
+    },
+
     async dispatchZoneSync(zoneName, presentedToken) {
       return withTransaction(pool, async (client) => {
         const actor = await requireAuthorizedUser(client, presentedToken, [
@@ -2076,11 +2914,15 @@ export async function createPostgresControlPlaneStore(
         const desiredStateVersion = createDesiredStateVersion();
         const { nodeId, payload } = await buildZoneDnsPayload(client, zoneName);
         const jobs = [
-          createDispatchedJobEnvelope(
-            "dns.sync",
-            nodeId,
-            desiredStateVersion,
-            payload as unknown as Record<string, unknown>
+          createQueuedDispatchJob(
+            createDispatchedJobEnvelope(
+              "dns.sync",
+              nodeId,
+              desiredStateVersion,
+              payload as unknown as Record<string, unknown>
+            ),
+            `zone:${zoneName}`,
+            "dns"
           )
         ];
 
@@ -2095,8 +2937,8 @@ export async function createPostgresControlPlaneStore(
         return {
           desiredStateVersion,
           jobs: jobs.map((job) => ({
-            ...job,
-            payload: sanitizePayload(job.payload) as Record<string, unknown>
+            ...job.envelope,
+            payload: sanitizePayload(job.envelope.payload) as Record<string, unknown>
           }))
         };
       });
@@ -2109,7 +2951,7 @@ export async function createPostgresControlPlaneStore(
           "platform_operator"
         ]);
         const desiredStateVersion = createDesiredStateVersion();
-        const jobs: DispatchedJobEnvelope[] = [];
+        const jobs: QueuedDispatchJob[] = [];
         const includeDns = request.includeDns ?? true;
         const includeProxy = request.includeProxy ?? true;
         const includeStandbyProxy = request.includeStandbyProxy ?? true;
@@ -2124,11 +2966,15 @@ export async function createPostgresControlPlaneStore(
             }
 
             jobs.push(
-              createDispatchedJobEnvelope(
-                "proxy.render",
-                plan.nodeId,
-                desiredStateVersion,
-                plan.payload as unknown as Record<string, unknown>
+              createQueuedDispatchJob(
+                createDispatchedJobEnvelope(
+                  "proxy.render",
+                  plan.nodeId,
+                  desiredStateVersion,
+                  plan.payload as unknown as Record<string, unknown>
+                ),
+                `app:${appSlug}:proxy:${plan.nodeId}`,
+                "site"
               )
             );
           }
@@ -2138,11 +2984,15 @@ export async function createPostgresControlPlaneStore(
           const dnsPlan = await buildZoneDnsPayload(client, proxyPlan.zoneName);
 
           jobs.push(
-            createDispatchedJobEnvelope(
-              "dns.sync",
-              dnsPlan.nodeId,
-              desiredStateVersion,
-              dnsPlan.payload as unknown as Record<string, unknown>
+            createQueuedDispatchJob(
+              createDispatchedJobEnvelope(
+                "dns.sync",
+                dnsPlan.nodeId,
+                desiredStateVersion,
+                dnsPlan.payload as unknown as Record<string, unknown>
+              ),
+              `zone:${proxyPlan.zoneName}`,
+              "dns"
             )
           );
         }
@@ -2162,8 +3012,8 @@ export async function createPostgresControlPlaneStore(
         return {
           desiredStateVersion,
           jobs: jobs.map((job) => ({
-            ...job,
-            payload: sanitizePayload(job.payload) as Record<string, unknown>
+            ...job.envelope,
+            payload: sanitizePayload(job.envelope.payload) as Record<string, unknown>
           }))
         };
       });
@@ -2176,13 +3026,38 @@ export async function createPostgresControlPlaneStore(
           "platform_operator"
         ]);
         const desiredStateVersion = createDesiredStateVersion();
-        const databasePlan = await buildDatabasePayload(client, appSlug, request.password);
+        const databasePlan = await buildDatabasePayload(
+          client,
+          appSlug,
+          request.password,
+          jobPayloadKey
+        );
+        await client.query(
+          `INSERT INTO shp_database_credentials (
+             database_id,
+             secret_payload,
+             updated_at
+           )
+           VALUES ($1, $2::jsonb, NOW())
+           ON CONFLICT (database_id)
+           DO UPDATE SET
+             secret_payload = EXCLUDED.secret_payload,
+             updated_at = EXCLUDED.updated_at`,
+          [
+            `database-${appSlug}`,
+            JSON.stringify(encodeDesiredPassword(request.password, jobPayloadKey))
+          ]
+        );
         const jobs = [
-          createDispatchedJobEnvelope(
-            databasePlan.kind,
-            databasePlan.nodeId,
-            desiredStateVersion,
-            databasePlan.payload
+          createQueuedDispatchJob(
+            createDispatchedJobEnvelope(
+              databasePlan.kind,
+              databasePlan.nodeId,
+              desiredStateVersion,
+              databasePlan.payload
+            ),
+            `database:${appSlug}`,
+            "database"
           )
         ];
 
@@ -2197,9 +3072,304 @@ export async function createPostgresControlPlaneStore(
         return {
           desiredStateVersion,
           jobs: jobs.map((job) => ({
-            ...job,
-            payload: sanitizePayload(job.payload) as Record<string, unknown>
+            ...job.envelope,
+            payload: sanitizePayload(job.envelope.payload) as Record<string, unknown>
           }))
+        };
+      });
+    },
+
+    async runReconciliationCycle(presentedToken) {
+      const startedAt = new Date().toISOString();
+      const desiredStateVersion = createDesiredStateVersion();
+      const runId = `reconcile-${randomUUID()}`;
+
+      return withTransaction(pool, async (client) => {
+        if (presentedToken) {
+          await requireAuthorizedUser(client, presentedToken, [
+            "platform_admin",
+            "platform_operator"
+          ]);
+        }
+
+        const { jobs: candidates, missingCredentialCount } =
+          await buildReconciliationCandidates(client, jobPayloadKey, desiredStateVersion);
+        const jobsToDispatch: QueuedDispatchJob[] = [];
+        let skippedJobCount = 0;
+
+        for (const candidate of candidates) {
+          if (await shouldDispatchQueuedJob(client, candidate)) {
+            jobsToDispatch.push(candidate);
+          } else {
+            skippedJobCount += 1;
+          }
+        }
+
+        if (jobsToDispatch.length > 0) {
+          await insertDispatchedJobs(
+            client,
+            jobsToDispatch,
+            null,
+            "worker.reconcile",
+            jobPayloadKey
+          );
+        }
+
+        const completedAt = new Date().toISOString();
+
+        await client.query(
+          `INSERT INTO shp_reconciliation_runs (
+             run_id,
+             desired_state_version,
+             generated_job_count,
+             skipped_job_count,
+             missing_credential_count,
+             summary,
+             started_at,
+             completed_at
+           )
+           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
+          [
+            runId,
+            desiredStateVersion,
+            jobsToDispatch.length,
+            skippedJobCount,
+            missingCredentialCount,
+            JSON.stringify({
+              jobs: jobsToDispatch.map((job) => ({
+                ...job.envelope,
+                payload: sanitizePayload(job.envelope.payload)
+              }))
+            }),
+            startedAt,
+            completedAt
+          ]
+        );
+
+        return {
+          runId,
+          desiredStateVersion,
+          startedAt,
+          completedAt,
+          generatedJobCount: jobsToDispatch.length,
+          skippedJobCount,
+          missingCredentialCount,
+          jobs: jobsToDispatch.map((job) => ({
+            ...job.envelope,
+            payload: sanitizePayload(job.envelope.payload) as Record<string, unknown>
+          }))
+        };
+      });
+    },
+
+    async getOperationsOverview(presentedToken) {
+      return withTransaction(pool, async (client) => {
+        if (presentedToken) {
+          await requireAuthorizedUser(client, presentedToken, [
+            "platform_admin",
+            "platform_operator"
+          ]);
+        }
+
+        const [nodeCountResult, pendingJobCountResult, failedJobCountResult, backupPolicyCountResult, latestReconciliation] =
+          await Promise.all([
+            client.query<{ count: string }>(`SELECT COUNT(*) AS count FROM shp_nodes`),
+            client.query<{ count: string }>(
+              `SELECT COUNT(*) AS count
+               FROM control_plane_jobs
+               WHERE completed_at IS NULL`
+            ),
+            client.query<{ count: string }>(
+              `SELECT COUNT(*) AS count
+               FROM control_plane_job_results
+               WHERE status = 'failed'`
+            ),
+            client.query<{ count: string }>(`SELECT COUNT(*) AS count FROM shp_backup_policies`),
+            getLatestReconciliationRun(client)
+          ]);
+
+        return {
+          generatedAt: new Date().toISOString(),
+          nodeCount: Number(nodeCountResult.rows[0]?.count ?? 0),
+          pendingJobCount: Number(pendingJobCountResult.rows[0]?.count ?? 0),
+          failedJobCount: Number(failedJobCountResult.rows[0]?.count ?? 0),
+          backupPolicyCount: Number(backupPolicyCountResult.rows[0]?.count ?? 0),
+          latestReconciliation: latestReconciliation ?? undefined
+        };
+      });
+    },
+
+    async getNodeHealth(presentedToken) {
+      return withTransaction(pool, async (client) => {
+        await requireAuthorizedUser(client, presentedToken, [
+          "platform_admin",
+          "platform_operator"
+        ]);
+
+        const result = await client.query<NodeHealthRow>(
+          `SELECT
+             nodes.node_id,
+             nodes.hostname,
+             control.version AS current_version,
+             control.last_seen_at,
+             COALESCE(pending.pending_job_count, 0) AS pending_job_count,
+             latest.status AS latest_job_status,
+             latest.summary AS latest_job_summary
+           FROM shp_nodes nodes
+           LEFT JOIN control_plane_nodes control
+             ON control.node_id = nodes.node_id
+           LEFT JOIN (
+             SELECT node_id, COUNT(*) AS pending_job_count
+             FROM control_plane_jobs
+             WHERE completed_at IS NULL
+             GROUP BY node_id
+           ) pending
+             ON pending.node_id = nodes.node_id
+           LEFT JOIN (
+             SELECT DISTINCT ON (jobs.node_id)
+               jobs.node_id,
+               results.status,
+               results.summary
+             FROM control_plane_jobs jobs
+             INNER JOIN control_plane_job_results results
+               ON results.job_id = jobs.id
+             ORDER BY jobs.node_id, results.completed_at DESC
+           ) latest
+             ON latest.node_id = nodes.node_id
+           ORDER BY nodes.node_id ASC`
+        );
+
+        return result.rows.map(toNodeHealthSnapshot);
+      });
+    },
+
+    async listJobHistory(presentedToken, limit = 50) {
+      return withTransaction(pool, async (client) => {
+        await requireAuthorizedUser(client, presentedToken, [
+          "platform_admin",
+          "platform_operator"
+        ]);
+        const boundedLimit = Math.max(1, Math.min(limit, 200));
+        const result = await client.query<JobHistoryRow>(
+          `SELECT
+             jobs.id,
+             jobs.desired_state_version,
+             jobs.kind,
+             jobs.node_id,
+             jobs.created_at,
+             jobs.claimed_at,
+             jobs.completed_at,
+             jobs.payload,
+             results.status,
+             results.summary,
+             jobs.dispatch_reason,
+             jobs.resource_key
+           FROM control_plane_jobs jobs
+           LEFT JOIN control_plane_job_results results
+             ON results.job_id = jobs.id
+           ORDER BY jobs.created_at DESC
+           LIMIT $1`,
+          [boundedLimit]
+        );
+
+        return result.rows.map((row) => toJobHistoryEntry(row, jobPayloadKey));
+      });
+    },
+
+    async getBackupsOverview(presentedToken) {
+      return withTransaction(pool, async (client) => {
+        await requireAuthorizedUser(client, presentedToken, [
+          "platform_admin",
+          "platform_operator"
+        ]);
+        const [policyResult, runResult] = await Promise.all([
+          client.query<BackupPolicyRow>(
+            `SELECT
+               policies.policy_slug,
+               tenants.slug AS tenant_slug,
+               policies.target_node_id,
+               policies.schedule,
+               policies.retention_days,
+               policies.storage_location,
+               policies.resource_selectors
+             FROM shp_backup_policies policies
+             INNER JOIN shp_tenants tenants
+               ON tenants.tenant_id = policies.tenant_id
+             ORDER BY policies.policy_slug ASC`
+          ),
+          client.query<BackupRunRow>(
+            `SELECT DISTINCT ON (policies.policy_slug)
+               runs.run_id,
+               policies.policy_slug,
+               runs.node_id,
+               runs.status,
+               runs.summary,
+               runs.started_at,
+               runs.completed_at
+             FROM shp_backup_runs runs
+             INNER JOIN shp_backup_policies policies
+               ON policies.policy_id = runs.policy_id
+             ORDER BY policies.policy_slug ASC, runs.started_at DESC`
+          )
+        ]);
+
+        return {
+          policies: policyResult.rows.map(toBackupPolicySummary),
+          latestRuns: runResult.rows.map(toBackupRunSummary)
+        };
+      });
+    },
+
+    async recordBackupRun(request, presentedToken) {
+      const startedAt = new Date().toISOString();
+
+      return withTransaction(pool, async (client) => {
+        await requireAuthorizedUser(client, presentedToken, [
+          "platform_admin",
+          "platform_operator"
+        ]);
+        const runId = `backup-run-${randomUUID()}`;
+
+        await client.query(
+          `INSERT INTO shp_backup_runs (
+             run_id,
+             policy_id,
+             node_id,
+             status,
+             summary,
+             started_at,
+             completed_at,
+             details
+           )
+           VALUES (
+             $1,
+             (SELECT policy_id FROM shp_backup_policies WHERE policy_slug = $2),
+             $3,
+             $4,
+             $5,
+             $6,
+             $7,
+             '{}'::jsonb
+           )`,
+          [
+            runId,
+            request.policySlug,
+            request.nodeId,
+            request.status,
+            request.summary,
+            startedAt,
+            request.completedAt ?? null
+          ]
+        );
+
+        return {
+          runId,
+          policySlug: request.policySlug,
+          nodeId: request.nodeId,
+          status: request.status,
+          summary: request.summary,
+          startedAt,
+          completedAt: request.completedAt
         };
       });
     },

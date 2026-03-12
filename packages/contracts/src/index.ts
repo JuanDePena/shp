@@ -280,6 +280,176 @@ export interface ControlPlaneStateSnapshot {
   reportedResults: ReportedJobResult[];
 }
 
+export interface DesiredStateTenantInput {
+  slug: string;
+  displayName: string;
+}
+
+export interface DesiredStateNodeInput {
+  nodeId: string;
+  hostname: string;
+  publicIpv4: string;
+  wireguardAddress: string;
+}
+
+export interface DesiredStateZoneInput {
+  zoneName: string;
+  tenantSlug: string;
+  primaryNodeId: string;
+  records: DnsRecordPayload[];
+}
+
+export interface DesiredStateAppInput {
+  slug: string;
+  tenantSlug: string;
+  zoneName: string;
+  primaryNodeId: string;
+  standbyNodeId?: string;
+  canonicalDomain: string;
+  aliases: string[];
+  backendPort: number;
+  runtimeImage: string;
+  storageRoot: string;
+  mode: string;
+}
+
+export interface DesiredStateDatabaseInput {
+  appSlug: string;
+  engine: "postgresql" | "mariadb";
+  databaseName: string;
+  databaseUser: string;
+  primaryNodeId: string;
+  standbyNodeId?: string;
+  pendingMigrationTo?: "postgresql" | "mariadb";
+  desiredPassword?: string;
+}
+
+export interface DesiredStateBackupPolicyInput {
+  policySlug: string;
+  tenantSlug: string;
+  targetNodeId: string;
+  schedule: string;
+  retentionDays: number;
+  storageLocation: string;
+  resourceSelectors: string[];
+}
+
+export interface DesiredStateSpec {
+  tenants: DesiredStateTenantInput[];
+  nodes: DesiredStateNodeInput[];
+  zones: DesiredStateZoneInput[];
+  apps: DesiredStateAppInput[];
+  databases: DesiredStateDatabaseInput[];
+  backupPolicies: DesiredStateBackupPolicyInput[];
+}
+
+export interface DesiredStateApplyRequest {
+  spec: DesiredStateSpec;
+  reason?: string;
+}
+
+export interface DesiredStateApplySummary {
+  tenantCount: number;
+  nodeCount: number;
+  zoneCount: number;
+  recordCount: number;
+  appCount: number;
+  databaseCount: number;
+  backupPolicyCount: number;
+}
+
+export interface DesiredStateApplyResponse {
+  appliedAt: string;
+  desiredStateVersion: string;
+  summary: DesiredStateApplySummary;
+}
+
+export interface DesiredStateExportResponse {
+  exportedAt: string;
+  spec: DesiredStateSpec;
+  yaml: string;
+}
+
+export interface ReconciliationRunSummary {
+  runId: string;
+  desiredStateVersion: string;
+  startedAt: string;
+  completedAt: string;
+  generatedJobCount: number;
+  skippedJobCount: number;
+  missingCredentialCount: number;
+  jobs: DispatchedJobEnvelope[];
+}
+
+export interface NodeHealthSnapshot {
+  nodeId: string;
+  hostname: string;
+  desiredRole: "inventory";
+  currentVersion?: string;
+  desiredVersion?: string;
+  lastSeenAt?: string;
+  pendingJobCount: number;
+  latestJobStatus?: DispatchedJobStatus;
+  latestJobSummary?: string;
+}
+
+export interface JobHistoryEntry {
+  jobId: string;
+  desiredStateVersion: string;
+  kind: DispatchedJobKind;
+  nodeId: string;
+  createdAt: string;
+  claimedAt?: string;
+  completedAt?: string;
+  status?: DispatchedJobStatus;
+  summary?: string;
+  dispatchReason?: string;
+  resourceKey?: string;
+  payload: Record<string, unknown>;
+}
+
+export interface BackupPolicySummary {
+  policySlug: string;
+  tenantSlug: string;
+  targetNodeId: string;
+  schedule: string;
+  retentionDays: number;
+  storageLocation: string;
+  resourceSelectors: string[];
+}
+
+export interface BackupRunSummary {
+  runId: string;
+  policySlug: string;
+  nodeId: string;
+  status: "running" | "succeeded" | "failed";
+  summary: string;
+  startedAt: string;
+  completedAt?: string;
+}
+
+export interface BackupRunRecordRequest {
+  policySlug: string;
+  nodeId: string;
+  status: "running" | "succeeded" | "failed";
+  summary: string;
+  completedAt?: string;
+}
+
+export interface BackupsOverview {
+  policies: BackupPolicySummary[];
+  latestRuns: BackupRunSummary[];
+}
+
+export interface OperationsOverview {
+  generatedAt: string;
+  nodeCount: number;
+  pendingJobCount: number;
+  failedJobCount: number;
+  backupPolicyCount: number;
+  latestReconciliation?: ReconciliationRunSummary;
+}
+
 export interface PanelApiMetadata {
   product: "SHP";
   service: PanelServiceName;

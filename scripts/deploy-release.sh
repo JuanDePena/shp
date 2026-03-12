@@ -14,7 +14,7 @@ if [[ "${mode}" != "active" && "${mode}" != "passive" ]]; then
   exit 1
 fi
 
-if [[ ! -d "${release_dir}" ]]; then
+if [[ "${target_host}" == "local" || ! -d "${release_dir}" ]]; then
   bash "${repo_root}/scripts/install-release.sh" "${version}"
 fi
 

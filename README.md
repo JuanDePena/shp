@@ -49,6 +49,10 @@ Packaged runtime artifacts:
 - `packaging/env/spanel-api.env.example`
 - `packaging/env/spanel-web.env.example`
 - `packaging/env/spanel-worker.env.example`
+- `packaging/postgresql/shp/conf/postgresql.shp.primary.conf`
+- `packaging/postgresql/shp/conf/postgresql.shp.standby.conf`
+- `packaging/postgresql/shp/conf/pg_hba.shp.conf`
+- `packaging/postgresql/shp/sql/create-shp-database.sql.template`
 
 Operational references:
 

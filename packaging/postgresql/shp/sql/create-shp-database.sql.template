@@ -1,0 +1,21 @@
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'simplehost_panel') THEN
+        EXECUTE format(
+            'CREATE ROLE %I LOGIN PASSWORD %L',
+            'simplehost_panel',
+            '__SHP_DATABASE_PASSWORD__'
+        );
+    END IF;
+END
+$$;
+
+SELECT format('CREATE DATABASE %I OWNER %I', 'simplehost_panel', 'simplehost_panel')
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM pg_database
+    WHERE datname = 'simplehost_panel'
+)
+\gexec
+
+REVOKE ALL ON DATABASE simplehost_panel FROM PUBLIC;

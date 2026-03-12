@@ -69,6 +69,8 @@ Current behavior:
 
 - the API persists nodes, jobs, and reported results in PostgreSQL
 - the API runs versioned database migrations before serving traffic
+- node enrollment requires `SHP_BOOTSTRAP_ENROLLMENT_TOKEN`
+- each enrolled node receives its own bearer token for subsequent control-plane calls
 - each newly registered node gets a small bootstrap queue
 - pending and reported job state is visible through `/v1/control-plane/state`
 - node registrations, job claims, and job reports are recorded in `shp_audit_events`

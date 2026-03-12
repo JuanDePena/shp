@@ -66,6 +66,7 @@ export interface NodeRegistrationResponse {
   nodeId: string;
   acceptedAt: string;
   pollIntervalMs: number;
+  nodeToken?: string;
 }
 
 export interface JobClaimRequest {
@@ -134,6 +135,45 @@ export function createBootstrapDispatchedJob(
   nodeId: string,
   kind: DispatchedJobKind = "proxy.render"
 ): DispatchedJobEnvelope {
+  if (kind === "proxy.render") {
+    return {
+      id: `bootstrap-${nodeId}-${kind.replace(/\./g, "-")}`,
+      desiredStateVersion: "bootstrap-v1",
+      kind,
+      nodeId,
+      createdAt: new Date().toISOString(),
+      payload: {
+        vhostName: `${nodeId}-bootstrap`,
+        serverName: `${nodeId}.bootstrap.simplehost.test`,
+        serverAliases: [`www.${nodeId}.bootstrap.simplehost.test`],
+        documentRoot: `/srv/www/${nodeId}/current/public`,
+        tls: false
+      }
+    };
+  }
+
+  if (kind === "dns.sync") {
+    return {
+      id: `bootstrap-${nodeId}-${kind.replace(/\./g, "-")}`,
+      desiredStateVersion: "bootstrap-v1",
+      kind,
+      nodeId,
+      createdAt: new Date().toISOString(),
+      payload: {
+        zoneName: `${nodeId}.bootstrap.simplehost.test`,
+        serial: 2026031201,
+        records: [
+          {
+            name: "@",
+            type: "A",
+            value: "127.0.0.1",
+            ttl: 300
+          }
+        ]
+      }
+    };
+  }
+
   return {
     id: `bootstrap-${nodeId}-${kind.replace(/\./g, "-")}`,
     desiredStateVersion: "bootstrap-v1",

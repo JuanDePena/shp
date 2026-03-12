@@ -51,4 +51,9 @@ export {
   type PanelDatabaseMigrationPlan,
   type PanelDatabaseMigrationRecord
 } from "./migrations.js";
-export { createPostgresControlPlaneStore, type PanelControlPlaneStore } from "./control-plane-store.js";
+export {
+  createPostgresControlPlaneStore,
+  NodeAuthorizationError,
+  type PanelControlPlaneStore,
+  type PanelControlPlaneStoreOptions
+} from "./control-plane-store.js";

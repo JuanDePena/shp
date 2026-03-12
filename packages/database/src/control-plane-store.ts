@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import { Pool, type PoolClient } from "pg";
 
@@ -45,6 +45,11 @@ interface ResultRow {
   completed_at: Date | string;
 }
 
+interface NodeCredentialRow {
+  node_id: string;
+  token_hash: string;
+}
+
 interface AuditEventInput {
   actorType: string;
   actorId?: string;
@@ -55,16 +60,45 @@ interface AuditEventInput {
   occurredAt?: string;
 }
 
+export interface PanelControlPlaneStoreOptions {
+  pollIntervalMs?: number;
+  bootstrapEnrollmentToken: string | null;
+}
+
 export interface PanelControlPlaneStore {
-  registerNode(request: NodeRegistrationRequest): Promise<NodeRegistrationResponse>;
-  claimJobs(request: JobClaimRequest): Promise<JobClaimResponse>;
-  reportJob(request: JobReportRequest): Promise<{ accepted: true }>;
+  registerNode(
+    request: NodeRegistrationRequest,
+    presentedToken: string | null
+  ): Promise<NodeRegistrationResponse>;
+  claimJobs(
+    request: JobClaimRequest,
+    presentedToken: string | null
+  ): Promise<JobClaimResponse>;
+  reportJob(
+    request: JobReportRequest,
+    presentedToken: string | null
+  ): Promise<{ accepted: true }>;
   getStateSnapshot(): Promise<ControlPlaneStateSnapshot>;
   close(): Promise<void>;
 }
 
+export class NodeAuthorizationError extends Error {
+  constructor(message = "Node authorization failed.") {
+    super(message);
+    this.name = "NodeAuthorizationError";
+  }
+}
+
 function normalizeTimestamp(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function hashToken(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function createOpaqueToken(): string {
+  return randomBytes(32).toString("base64url");
 }
 
 function toDispatchedJob(row: JobRow): DispatchedJobEnvelope {
@@ -179,10 +213,88 @@ async function insertAuditEvent(
   );
 }
 
+async function getNodeCredential(
+  client: PoolClient,
+  nodeId: string
+): Promise<NodeCredentialRow | null> {
+  const result = await client.query<NodeCredentialRow>(
+    `SELECT node_id, token_hash
+     FROM control_plane_node_credentials
+     WHERE node_id = $1`,
+    [nodeId]
+  );
+
+  return result.rows[0] ?? null;
+}
+
+async function touchNodeCredential(
+  client: PoolClient,
+  nodeId: string,
+  tokenHash: string,
+  timestamp: string
+): Promise<void> {
+  await client.query(
+    `UPDATE control_plane_node_credentials
+     SET last_used_at = $3
+     WHERE node_id = $1
+       AND token_hash = $2`,
+    [nodeId, tokenHash, timestamp]
+  );
+}
+
+async function upsertNodeCredential(
+  client: PoolClient,
+  nodeId: string,
+  rawToken: string,
+  timestamp: string
+): Promise<void> {
+  await client.query(
+    `INSERT INTO control_plane_node_credentials (
+       node_id,
+       token_hash,
+       issued_at,
+       last_used_at
+     )
+     VALUES ($1, $2, $3, $3)
+     ON CONFLICT (node_id)
+     DO UPDATE SET
+       token_hash = EXCLUDED.token_hash,
+       issued_at = EXCLUDED.issued_at,
+       last_used_at = EXCLUDED.last_used_at`,
+    [nodeId, hashToken(rawToken), timestamp]
+  );
+}
+
+async function authenticateNode(
+  client: PoolClient,
+  nodeId: string,
+  presentedToken: string | null,
+  timestamp: string
+): Promise<void> {
+  if (!presentedToken) {
+    throw new NodeAuthorizationError("Missing bearer token.");
+  }
+
+  const credential = await getNodeCredential(client, nodeId);
+
+  if (!credential) {
+    throw new NodeAuthorizationError(`Node ${nodeId} is not enrolled.`);
+  }
+
+  const presentedTokenHash = hashToken(presentedToken);
+
+  if (presentedTokenHash !== credential.token_hash) {
+    throw new NodeAuthorizationError(`Bearer token rejected for node ${nodeId}.`);
+  }
+
+  await touchNodeCredential(client, nodeId, presentedTokenHash, timestamp);
+}
+
 export async function createPostgresControlPlaneStore(
   databaseUrl: string,
-  pollIntervalMs = 5000
+  options: PanelControlPlaneStoreOptions
 ): Promise<PanelControlPlaneStore> {
+  const pollIntervalMs = options.pollIntervalMs ?? 5000;
   const pool = new Pool({
     connectionString: databaseUrl,
     application_name: "simplehost-panel-api"
@@ -191,10 +303,31 @@ export async function createPostgresControlPlaneStore(
   await runPanelDatabaseMigrations(pool);
 
   return {
-    async registerNode(request) {
+    async registerNode(request, presentedToken) {
       const acceptedAt = new Date().toISOString();
+      let issuedNodeToken: string | undefined;
 
       await withTransaction(pool, async (client) => {
+        const credential = await getNodeCredential(client, request.nodeId);
+
+        if (credential) {
+          await authenticateNode(client, request.nodeId, presentedToken, acceptedAt);
+        } else {
+          if (!options.bootstrapEnrollmentToken) {
+            throw new NodeAuthorizationError(
+              "Bootstrap enrollment token is not configured on SHP."
+            );
+          }
+
+          if (presentedToken !== options.bootstrapEnrollmentToken) {
+            throw new NodeAuthorizationError(
+              `Enrollment token rejected for node ${request.nodeId}.`
+            );
+          }
+
+          issuedNodeToken = createOpaqueToken();
+        }
+
         await client.query(
           `INSERT INTO control_plane_nodes (
              node_id,
@@ -221,6 +354,11 @@ export async function createPostgresControlPlaneStore(
         );
 
         await seedBootstrapJobs(client, request.nodeId);
+
+        if (issuedNodeToken) {
+          await upsertNodeCredential(client, request.nodeId, issuedNodeToken, acceptedAt);
+        }
+
         await insertAuditEvent(client, {
           actorType: "node",
           actorId: request.nodeId,
@@ -230,7 +368,8 @@ export async function createPostgresControlPlaneStore(
           payload: {
             hostname: request.hostname,
             version: request.version,
-            supportedJobKinds: request.supportedJobKinds
+            supportedJobKinds: request.supportedJobKinds,
+            issuedNodeToken: issuedNodeToken !== undefined
           },
           occurredAt: acceptedAt
         });
@@ -239,14 +378,17 @@ export async function createPostgresControlPlaneStore(
       return {
         nodeId: request.nodeId,
         acceptedAt,
-        pollIntervalMs
+        pollIntervalMs,
+        nodeToken: issuedNodeToken
       };
     },
 
-    async claimJobs(request) {
+    async claimJobs(request, presentedToken) {
       const claimedAt = new Date().toISOString();
 
       const jobs = await withTransaction(pool, async (client) => {
+        await authenticateNode(client, request.nodeId, presentedToken, claimedAt);
+
         await client.query(
           `UPDATE control_plane_nodes
            SET hostname = $2,
@@ -311,10 +453,12 @@ export async function createPostgresControlPlaneStore(
       };
     },
 
-    async reportJob(request) {
+    async reportJob(request, presentedToken) {
       const reportedAt = new Date().toISOString();
 
       await withTransaction(pool, async (client) => {
+        await authenticateNode(client, request.nodeId, presentedToken, reportedAt);
+
         await client.query(
           `UPDATE control_plane_nodes
            SET last_seen_at = $2

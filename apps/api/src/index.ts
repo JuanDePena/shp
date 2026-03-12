@@ -12,6 +12,7 @@ import {
 import {
   createPanelDatabaseHealthSummary,
   createPostgresControlPlaneStore,
+  NodeAuthorizationError,
   type PanelControlPlaneStore
 } from "@simplehost/panel-database";
 
@@ -37,6 +38,17 @@ async function readJsonBody<T>(request: IncomingMessage): Promise<T> {
   }
 
   return JSON.parse(Buffer.concat(chunks).toString("utf8")) as T;
+}
+
+function readBearerToken(request: IncomingMessage): string | null {
+  const header = request.headers.authorization;
+
+  if (!header) {
+    return null;
+  }
+
+  const match = /^Bearer\s+(.+)$/i.exec(header);
+  return match?.[1]?.trim() || null;
 }
 
 function createHealthSnapshot(): PanelHealthSnapshot {
@@ -85,7 +97,8 @@ async function requestHandler(
       response,
       200,
       await controlPlaneStore.registerNode(
-        await readJsonBody<NodeRegistrationRequest>(request)
+        await readJsonBody<NodeRegistrationRequest>(request),
+        readBearerToken(request)
       )
     );
     return;
@@ -95,7 +108,10 @@ async function requestHandler(
     writeJson(
       response,
       200,
-      await controlPlaneStore.claimJobs(await readJsonBody<JobClaimRequest>(request))
+      await controlPlaneStore.claimJobs(
+        await readJsonBody<JobClaimRequest>(request),
+        readBearerToken(request)
+      )
     );
     return;
   }
@@ -104,7 +120,10 @@ async function requestHandler(
     writeJson(
       response,
       200,
-      await controlPlaneStore.reportJob(await readJsonBody<JobReportRequest>(request))
+      await controlPlaneStore.reportJob(
+        await readJsonBody<JobReportRequest>(request),
+        readBearerToken(request)
+      )
     );
     return;
   }
@@ -137,10 +156,21 @@ export async function createPanelApiRuntime(): Promise<{
 }> {
   const controlPlaneStore = await createPostgresControlPlaneStore(
     config.database.url,
-    config.worker.pollIntervalMs
+    {
+      pollIntervalMs: config.worker.pollIntervalMs,
+      bootstrapEnrollmentToken: config.auth.bootstrapEnrollmentToken
+    }
   );
   const server = createServer((request, response) => {
     void requestHandler(request, response, controlPlaneStore).catch((error: unknown) => {
+      if (error instanceof NodeAuthorizationError) {
+        writeJson(response, 401, {
+          error: "Unauthorized",
+          message: error.message
+        });
+        return;
+      }
+
       writeJson(response, 500, {
         error: "Internal Server Error",
         message: error instanceof Error ? error.message : String(error)

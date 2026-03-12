@@ -12,6 +12,10 @@ export interface PanelDatabaseRuntimeConfig {
   url: string;
 }
 
+export interface PanelAuthRuntimeConfig {
+  bootstrapEnrollmentToken: string | null;
+}
+
 export interface PanelRuntimeConfig {
   env: string;
   version: string;
@@ -19,6 +23,7 @@ export interface PanelRuntimeConfig {
   web: PanelListenerConfig;
   worker: PanelWorkerConfig;
   database: PanelDatabaseRuntimeConfig;
+  auth: PanelAuthRuntimeConfig;
 }
 
 function readString(value: string | undefined, fallback: string): string {
@@ -45,6 +50,10 @@ function readPositiveInt(value: string | undefined, fallback: number): number {
   return parsed;
 }
 
+function readOptionalString(value: string | undefined): string | null {
+  return value && value.trim().length > 0 ? value.trim() : null;
+}
+
 export function createPanelRuntimeConfig(
   env: NodeJS.ProcessEnv = process.env
 ): PanelRuntimeConfig {
@@ -68,6 +77,9 @@ export function createPanelRuntimeConfig(
         env.SHP_DATABASE_URL,
         "postgresql://simplehost_panel:change-me@127.0.0.1:5433/simplehost_panel"
       )
+    },
+    auth: {
+      bootstrapEnrollmentToken: readOptionalString(env.SHP_BOOTSTRAP_ENROLLMENT_TOKEN)
     }
   };
 }

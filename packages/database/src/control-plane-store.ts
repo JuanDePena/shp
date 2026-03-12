@@ -295,14 +295,22 @@ function sanitizePayload(value: unknown): unknown {
   return sanitized;
 }
 
-function toDispatchedJob(row: JobRow): DispatchedJobEnvelope {
+function toDispatchedJob(
+  row: JobRow,
+  options: { sanitizeSecrets?: boolean } = {}
+): DispatchedJobEnvelope {
+  const { sanitizeSecrets = true } = options;
+
   return {
     id: row.id,
     desiredStateVersion: row.desired_state_version,
     kind: row.kind as DispatchedJobEnvelope["kind"],
     nodeId: row.node_id,
     createdAt: normalizeTimestamp(row.created_at),
-    payload: sanitizePayload(row.payload) as Record<string, unknown>
+    payload: (sanitizeSecrets ? sanitizePayload(row.payload) : row.payload) as Record<
+      string,
+      unknown
+    >
   };
 }
 
@@ -1418,7 +1426,7 @@ export async function createPostgresControlPlaneStore(
           occurredAt: claimedAt
         });
 
-        return result.rows.map(toDispatchedJob);
+        return result.rows.map((row) => toDispatchedJob(row, { sanitizeSecrets: false }));
       });
 
       return {

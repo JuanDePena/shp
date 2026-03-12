@@ -14,6 +14,14 @@ export interface PanelDatabaseRuntimeConfig {
 
 export interface PanelAuthRuntimeConfig {
   bootstrapEnrollmentToken: string | null;
+  bootstrapAdminEmail: string | null;
+  bootstrapAdminPassword: string | null;
+  bootstrapAdminName: string | null;
+  sessionTtlSeconds: number;
+}
+
+export interface PanelInventoryRuntimeConfig {
+  importPath: string;
 }
 
 export interface PanelRuntimeConfig {
@@ -24,6 +32,7 @@ export interface PanelRuntimeConfig {
   worker: PanelWorkerConfig;
   database: PanelDatabaseRuntimeConfig;
   auth: PanelAuthRuntimeConfig;
+  inventory: PanelInventoryRuntimeConfig;
 }
 
 function readString(value: string | undefined, fallback: string): string {
@@ -79,7 +88,17 @@ export function createPanelRuntimeConfig(
       )
     },
     auth: {
-      bootstrapEnrollmentToken: readOptionalString(env.SHP_BOOTSTRAP_ENROLLMENT_TOKEN)
+      bootstrapEnrollmentToken: readOptionalString(env.SHP_BOOTSTRAP_ENROLLMENT_TOKEN),
+      bootstrapAdminEmail: readOptionalString(env.SHP_BOOTSTRAP_ADMIN_EMAIL),
+      bootstrapAdminPassword: readOptionalString(env.SHP_BOOTSTRAP_ADMIN_PASSWORD),
+      bootstrapAdminName: readOptionalString(env.SHP_BOOTSTRAP_ADMIN_NAME),
+      sessionTtlSeconds: readPositiveInt(env.SHP_SESSION_TTL_SECONDS, 43200)
+    },
+    inventory: {
+      importPath: readString(
+        env.SHP_INVENTORY_PATH,
+        "/opt/simplehost/repos/simplehost-platform-config/inventory/apps.yaml"
+      )
     }
   };
 }

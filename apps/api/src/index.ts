@@ -3,6 +3,11 @@ import { pathToFileURL } from "node:url";
 
 import { createPanelRuntimeConfig } from "@simplehost/panel-config";
 import {
+  type AppReconcileRequest,
+  type AuthLoginRequest,
+  type CreateUserRequest,
+  type DatabaseReconcileRequest,
+  type InventoryImportRequest,
   createPanelApiMetadata,
   type JobClaimRequest,
   type JobReportRequest,
@@ -13,6 +18,7 @@ import {
   createPanelDatabaseHealthSummary,
   createPostgresControlPlaneStore,
   NodeAuthorizationError,
+  UserAuthorizationError,
   type PanelControlPlaneStore
 } from "@simplehost/panel-database";
 
@@ -49,6 +55,10 @@ function readBearerToken(request: IncomingMessage): string | null {
 
   const match = /^Bearer\s+(.+)$/i.exec(header);
   return match?.[1]?.trim() || null;
+}
+
+function matchRoute(pathname: string, pattern: RegExp): RegExpMatchArray | null {
+  return pathname.match(pattern);
 }
 
 function createHealthSnapshot(): PanelHealthSnapshot {
@@ -88,7 +98,130 @@ async function requestHandler(
   }
 
   if (request.method === "GET" && url.pathname === "/v1/control-plane/state") {
+    await controlPlaneStore.getCurrentUser(readBearerToken(request));
     writeJson(response, 200, await controlPlaneStore.getStateSnapshot());
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/auth/login") {
+    writeJson(
+      response,
+      200,
+      await controlPlaneStore.loginUser(await readJsonBody<AuthLoginRequest>(request))
+    );
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/auth/me") {
+    writeJson(response, 200, await controlPlaneStore.getCurrentUser(readBearerToken(request)));
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/auth/logout") {
+    writeJson(response, 200, await controlPlaneStore.logoutUser(readBearerToken(request)));
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/users") {
+    writeJson(response, 200, await controlPlaneStore.listUsers(readBearerToken(request)));
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/users") {
+    writeJson(
+      response,
+      201,
+      await controlPlaneStore.createUser(
+        await readJsonBody<CreateUserRequest>(request),
+        readBearerToken(request)
+      )
+    );
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/v1/inventory/summary") {
+    writeJson(
+      response,
+      200,
+      await controlPlaneStore.getInventorySnapshot(readBearerToken(request))
+    );
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/inventory/import") {
+    writeJson(
+      response,
+      200,
+      await controlPlaneStore.importInventory(
+        await readJsonBody<InventoryImportRequest>(request),
+        readBearerToken(request)
+      )
+    );
+    return;
+  }
+
+  const zoneSyncMatch = matchRoute(url.pathname, /^\/v1\/zones\/([^/]+)\/sync$/);
+
+  if (request.method === "POST" && zoneSyncMatch) {
+    writeJson(
+      response,
+      200,
+      await controlPlaneStore.dispatchZoneSync(
+        decodeURIComponent(zoneSyncMatch[1]!),
+        readBearerToken(request)
+      )
+    );
+    return;
+  }
+
+  const renderProxyMatch = matchRoute(url.pathname, /^\/v1\/apps\/([^/]+)\/render-proxy$/);
+
+  if (request.method === "POST" && renderProxyMatch) {
+    writeJson(
+      response,
+      200,
+      await controlPlaneStore.dispatchAppReconcile(
+        decodeURIComponent(renderProxyMatch[1]!),
+        {
+          includeDns: false,
+          includeProxy: true
+        },
+        readBearerToken(request)
+      )
+    );
+    return;
+  }
+
+  const appReconcileMatch = matchRoute(url.pathname, /^\/v1\/apps\/([^/]+)\/reconcile$/);
+
+  if (request.method === "POST" && appReconcileMatch) {
+    writeJson(
+      response,
+      200,
+      await controlPlaneStore.dispatchAppReconcile(
+        decodeURIComponent(appReconcileMatch[1]!),
+        await readJsonBody<AppReconcileRequest>(request),
+        readBearerToken(request)
+      )
+    );
+    return;
+  }
+
+  const databaseReconcileMatch = matchRoute(
+    url.pathname,
+    /^\/v1\/databases\/([^/]+)\/reconcile$/
+  );
+
+  if (request.method === "POST" && databaseReconcileMatch) {
+    writeJson(
+      response,
+      200,
+      await controlPlaneStore.dispatchDatabaseReconcile(
+        decodeURIComponent(databaseReconcileMatch[1]!),
+        await readJsonBody<DatabaseReconcileRequest>(request),
+        readBearerToken(request)
+      )
+    );
     return;
   }
 
@@ -134,7 +267,18 @@ async function requestHandler(
       endpoints: [
         "GET /healthz",
         "GET /v1/meta",
+        "POST /v1/auth/login",
+        "GET /v1/auth/me",
+        "POST /v1/auth/logout",
+        "GET /v1/users",
+        "POST /v1/users",
+        "GET /v1/inventory/summary",
+        "POST /v1/inventory/import",
         "GET /v1/control-plane/state",
+        "POST /v1/zones/:zone/sync",
+        "POST /v1/apps/:slug/render-proxy",
+        "POST /v1/apps/:slug/reconcile",
+        "POST /v1/databases/:slug/reconcile",
         "POST /v1/nodes/register",
         "POST /v1/jobs/claim",
         "POST /v1/jobs/report"
@@ -158,7 +302,12 @@ export async function createPanelApiRuntime(): Promise<{
     config.database.url,
     {
       pollIntervalMs: config.worker.pollIntervalMs,
-      bootstrapEnrollmentToken: config.auth.bootstrapEnrollmentToken
+      bootstrapEnrollmentToken: config.auth.bootstrapEnrollmentToken,
+      sessionTtlSeconds: config.auth.sessionTtlSeconds,
+      bootstrapAdminEmail: config.auth.bootstrapAdminEmail,
+      bootstrapAdminPassword: config.auth.bootstrapAdminPassword,
+      bootstrapAdminName: config.auth.bootstrapAdminName,
+      defaultInventoryImportPath: config.inventory.importPath
     }
   );
   const server = createServer((request, response) => {
@@ -168,6 +317,18 @@ export async function createPanelApiRuntime(): Promise<{
           error: "Unauthorized",
           message: error.message
         });
+        return;
+      }
+
+      if (error instanceof UserAuthorizationError) {
+        writeJson(
+          response,
+          error.message.includes("required role") ? 403 : 401,
+          {
+            error: error.message.includes("required role") ? "Forbidden" : "Unauthorized",
+            message: error.message
+          }
+        );
         return;
       }
 

@@ -1,5 +1,13 @@
 export type PanelServiceName = "api" | "web" | "worker";
 export type PanelHealthStatus = "ok" | "degraded";
+export const panelGlobalRoles = ["platform_admin", "platform_operator"] as const;
+export type PanelGlobalRole = (typeof panelGlobalRoles)[number];
+export const tenantMembershipRoles = [
+  "tenant_owner",
+  "tenant_admin",
+  "tenant_readonly"
+] as const;
+export type TenantMembershipRole = (typeof tenantMembershipRoles)[number];
 export type PlannedResourceKind =
   | "dns"
   | "site"
@@ -20,6 +28,42 @@ export const dispatchedJobKinds = [
 
 export type DispatchedJobKind = (typeof dispatchedJobKinds)[number];
 export type DispatchedJobStatus = "applied" | "skipped" | "failed";
+
+export interface ProxyRenderPayload {
+  vhostName: string;
+  serverName: string;
+  serverAliases?: string[];
+  documentRoot: string;
+  tls?: boolean;
+}
+
+export interface DnsRecordPayload {
+  name: string;
+  type: "A" | "AAAA" | "CNAME" | "TXT";
+  value: string;
+  ttl: number;
+}
+
+export interface DnsSyncPayload {
+  zoneName: string;
+  serial: number;
+  nameservers: string[];
+  records: DnsRecordPayload[];
+}
+
+export interface PostgresReconcilePayload {
+  appSlug: string;
+  databaseName: string;
+  roleName: string;
+  password: string;
+}
+
+export interface MariadbReconcilePayload {
+  appSlug: string;
+  databaseName: string;
+  userName: string;
+  password: string;
+}
 
 export interface PanelHealthSnapshot {
   service: PanelServiceName;
@@ -97,6 +141,127 @@ export interface JobReportRequest {
   result: ReportedJobResult;
 }
 
+export interface TenantMembershipSummary {
+  tenantId: string;
+  tenantSlug: string;
+  tenantDisplayName: string;
+  role: TenantMembershipRole;
+}
+
+export interface AuthenticatedUserSummary {
+  userId: string;
+  email: string;
+  displayName: string;
+  status: string;
+  globalRoles: PanelGlobalRole[];
+  tenantMemberships: TenantMembershipSummary[];
+}
+
+export interface AuthLoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface AuthLoginResponse {
+  sessionToken: string;
+  expiresAt: string;
+  user: AuthenticatedUserSummary;
+}
+
+export interface AuthLogoutResponse {
+  revoked: true;
+}
+
+export interface CreateUserTenantMembershipInput {
+  tenantSlug: string;
+  role: TenantMembershipRole;
+}
+
+export interface CreateUserRequest {
+  email: string;
+  displayName: string;
+  password: string;
+  globalRoles?: PanelGlobalRole[];
+  tenantMemberships?: CreateUserTenantMembershipInput[];
+}
+
+export interface CreateUserResponse {
+  user: AuthenticatedUserSummary;
+}
+
+export interface InventoryImportRequest {
+  path?: string;
+}
+
+export interface InventoryImportSummary {
+  importId: string;
+  sourcePath: string;
+  importedAt: string;
+  tenantCount: number;
+  nodeCount: number;
+  zoneCount: number;
+  appCount: number;
+  siteCount: number;
+  databaseCount: number;
+}
+
+export interface InventoryNodeSummary {
+  nodeId: string;
+  hostname: string;
+  publicIpv4: string;
+  wireguardAddress: string;
+}
+
+export interface InventoryZoneSummary {
+  zoneName: string;
+  tenantSlug: string;
+  primaryNodeId: string;
+}
+
+export interface InventoryAppSummary {
+  slug: string;
+  tenantSlug: string;
+  zoneName: string;
+  primaryNodeId: string;
+  canonicalDomain: string;
+  aliases: string[];
+  backendPort: number;
+  runtimeImage: string;
+  storageRoot: string;
+  mode: string;
+}
+
+export interface InventoryDatabaseSummary {
+  appSlug: string;
+  engine: "postgresql" | "mariadb";
+  databaseName: string;
+  databaseUser: string;
+  primaryNodeId: string;
+  pendingMigrationTo?: "postgresql" | "mariadb";
+}
+
+export interface InventoryStateSnapshot {
+  latestImport: InventoryImportSummary | null;
+  nodes: InventoryNodeSummary[];
+  zones: InventoryZoneSummary[];
+  apps: InventoryAppSummary[];
+  databases: InventoryDatabaseSummary[];
+}
+
+export interface AppReconcileRequest {
+  includeDns?: boolean;
+  includeProxy?: boolean;
+}
+
+export interface DatabaseReconcileRequest {
+  password: string;
+}
+
+export interface JobDispatchResponse {
+  desiredStateVersion: string;
+  jobs: DispatchedJobEnvelope[];
+}
+
 export interface RegisteredNodeState {
   nodeId: string;
   hostname: string;
@@ -148,7 +313,7 @@ export function createBootstrapDispatchedJob(
         serverAliases: [`www.${nodeId}.bootstrap.simplehost.test`],
         documentRoot: `/srv/www/${nodeId}/current/public`,
         tls: false
-      }
+      } satisfies ProxyRenderPayload
     };
   }
 
@@ -162,6 +327,10 @@ export function createBootstrapDispatchedJob(
       payload: {
         zoneName: `${nodeId}.bootstrap.simplehost.test`,
         serial: 2026031201,
+        nameservers: [
+          `ns1.${nodeId}.bootstrap.simplehost.test`,
+          `ns2.${nodeId}.bootstrap.simplehost.test`
+        ],
         records: [
           {
             name: "@",
@@ -170,7 +339,7 @@ export function createBootstrapDispatchedJob(
             ttl: 300
           }
         ]
-      }
+      } satisfies DnsSyncPayload
     };
   }
 
@@ -184,5 +353,21 @@ export function createBootstrapDispatchedJob(
       requestedBy: "bootstrap",
       dryRun: true
     }
+  };
+}
+
+export function createDispatchedJobEnvelope(
+  kind: DispatchedJobKind,
+  nodeId: string,
+  desiredStateVersion: string,
+  payload: Record<string, unknown>
+): DispatchedJobEnvelope {
+  return {
+    id: `${desiredStateVersion}-${nodeId}-${kind.replace(/\./g, "-")}`,
+    desiredStateVersion,
+    kind,
+    nodeId,
+    createdAt: new Date().toISOString(),
+    payload
   };
 }

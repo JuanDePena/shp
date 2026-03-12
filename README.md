@@ -34,6 +34,7 @@ Useful commands:
 
 - `./scripts/bootstrap.sh`
 - `./scripts/bootstrap-shp-standby.sh`
+- `./scripts/install-release.sh`
 - `pnpm build`
 - `SHP_DATABASE_URL=postgresql://... pnpm db:migrate`
 - `pnpm typecheck`
@@ -64,18 +65,34 @@ The current API bootstrap now exposes a minimal control-plane loop for `SHM`:
 
 - `GET /healthz`
 - `GET /v1/meta`
+- `POST /v1/auth/login`
+- `GET /v1/auth/me`
+- `POST /v1/auth/logout`
+- `GET /v1/users`
+- `POST /v1/users`
+- `GET /v1/inventory/summary`
+- `POST /v1/inventory/import`
 - `GET /v1/control-plane/state`
+- `POST /v1/zones/:zone/sync`
+- `POST /v1/apps/:slug/render-proxy`
+- `POST /v1/apps/:slug/reconcile`
+- `POST /v1/databases/:slug/reconcile`
 - `POST /v1/nodes/register`
 - `POST /v1/jobs/claim`
 - `POST /v1/jobs/report`
 
 Current behavior:
 
-- the API persists nodes, jobs, and reported results in PostgreSQL
+- the API persists users, sessions, imported inventory, nodes, jobs, and reported results in PostgreSQL
 - the API runs versioned database migrations before serving traffic
+- bootstrap admin creation can be driven by env through `SHP_BOOTSTRAP_ADMIN_*`
+- operator auth uses hashed passwords plus bearer session tokens
+- operator actions are role-gated through `platform_admin` and `platform_operator`
+- inventory import reads [`/opt/simplehost/repos/simplehost-platform-config/inventory/apps.yaml`](/opt/simplehost/repos/simplehost-platform-config/inventory/apps.yaml) by default
+- imported inventory is normalized into tenants, nodes, zones, apps, sites, and databases
+- API endpoints can now dispatch real `proxy.render`, `dns.sync`, `postgres.reconcile`, and `mariadb.reconcile` jobs
 - node enrollment requires `SHP_BOOTSTRAP_ENROLLMENT_TOKEN`
 - each enrolled node receives its own bearer token for subsequent control-plane calls
-- each newly registered node gets a small bootstrap queue
 - pending and reported job state is visible through `/v1/control-plane/state`
 - node registrations, job claims, and job reports are recorded in `shp_audit_events`
 

@@ -54,6 +54,7 @@ export {
 export {
   createPostgresControlPlaneStore,
   NodeAuthorizationError,
+  UserAuthorizationError,
   type PanelControlPlaneStore,
   type PanelControlPlaneStoreOptions
 } from "./control-plane-store.js";

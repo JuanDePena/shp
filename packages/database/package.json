@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@simplehost/panel-contracts": "workspace:*",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "yaml": "^2.8.1"
   }
 }

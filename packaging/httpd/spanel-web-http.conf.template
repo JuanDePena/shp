@@ -1,0 +1,20 @@
+Alias /.well-known/acme-challenge/ /var/www/letsencrypt/.well-known/acme-challenge/
+
+<Directory "/var/www/letsencrypt/.well-known/acme-challenge/">
+    Options None
+    AllowOverride None
+    Require all granted
+</Directory>
+
+<VirtualHost *:80>
+    ServerName __SERVER_NAME__
+
+    ProxyPreserveHost On
+    RequestHeader set X-Forwarded-Proto "http"
+    ProxyPass /.well-known/acme-challenge/ !
+    ProxyPass / http://__BACKEND_HOST__:__BACKEND_PORT__/
+    ProxyPassReverse / http://__BACKEND_HOST__:__BACKEND_PORT__/
+
+    ErrorLog /var/log/httpd/__SERVER_NAME___error.log
+    CustomLog /var/log/httpd/__SERVER_NAME___access.log combined
+</VirtualHost>

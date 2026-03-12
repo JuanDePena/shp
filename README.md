@@ -36,6 +36,7 @@ Useful commands:
 - `./scripts/bootstrap-shp-standby.sh`
 - `./scripts/install-release.sh`
 - `./scripts/deploy-release.sh`
+- `./scripts/configure-public-web.sh`
 - `./scripts/build-release-bundle.sh`
 - `./scripts/install-bundle.sh`
 - `./scripts/rollback-release.sh`
@@ -53,6 +54,8 @@ Release version format:
 - `YYMM.DD.NN`
 - first stamped release: `2603.12.00`
 
+`./scripts/configure-public-web.sh` defaults the certificate contact to `webmaster@<domain>`, for example `webmaster@pyrosa.com.do` when the host is `vps-prd.pyrosa.com.do`.
+
 Packaged runtime artifacts:
 
 - `packaging/systemd/spanel-api.service`
@@ -61,6 +64,8 @@ Packaged runtime artifacts:
 - `packaging/env/spanel-api.env.example`
 - `packaging/env/spanel-web.env.example`
 - `packaging/env/spanel-worker.env.example`
+- `packaging/httpd/spanel-web-http.conf.template`
+- `packaging/httpd/spanel-web-https.conf.template`
 - `packaging/postgresql/shp/conf/postgresql.shp.primary.conf`
 - `packaging/postgresql/shp/conf/postgresql.shp.standby.conf`
 - `packaging/postgresql/shp/conf/pg_hba.shp.conf`

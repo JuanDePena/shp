@@ -196,6 +196,7 @@ interface ZoneDispatchRow {
   zone_name: string;
   primary_node_id: string;
   public_ipv4: string;
+  desired_updated_at: Date | string;
 }
 
 interface AppDispatchRow {
@@ -733,10 +734,6 @@ function titleizeSlug(value: string): string {
 
 function createDesiredStateVersion(): string {
   return `dispatch-${Date.now()}-${randomUUID().slice(0, 8)}`;
-}
-
-function createDnsSerial(): number {
-  return Math.floor(Date.now() / 1000);
 }
 
 function stableStringify(value: unknown): string {
@@ -2131,11 +2128,28 @@ async function buildZoneDnsPayload(
     `SELECT
        zones.zone_name,
        zones.primary_node_id,
-       nodes.public_ipv4
+       nodes.public_ipv4,
+       GREATEST(
+         zones.updated_at,
+         COALESCE(MAX(records.updated_at), zones.updated_at),
+         COALESCE(MAX(apps.updated_at), zones.updated_at),
+         COALESCE(MAX(sites.updated_at), zones.updated_at)
+       ) AS desired_updated_at
      FROM shp_dns_zones zones
      INNER JOIN shp_nodes nodes
        ON nodes.node_id = zones.primary_node_id
-     WHERE zones.zone_name = $1`,
+     LEFT JOIN shp_dns_records records
+       ON records.zone_id = zones.zone_id
+     LEFT JOIN shp_apps apps
+       ON apps.zone_id = zones.zone_id
+     LEFT JOIN shp_sites sites
+       ON sites.app_id = apps.app_id
+     WHERE zones.zone_name = $1
+     GROUP BY
+       zones.zone_name,
+       zones.primary_node_id,
+       nodes.public_ipv4,
+       zones.updated_at`,
     [zoneName]
   );
   const zone = zoneResult.rows[0];
@@ -2177,7 +2191,7 @@ async function buildZoneDnsPayload(
     nodeId: zone.primary_node_id,
     payload: {
       zoneName,
-      serial: createDnsSerial(),
+      serial: Math.max(1, Math.floor(new Date(zone.desired_updated_at).getTime() / 1000)),
       nameservers: [`ns1.${zoneName}`, `ns2.${zoneName}`],
       records:
         recordResult.rows.length > 0

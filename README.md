@@ -95,8 +95,10 @@ Current behavior:
 - bootstrap admin creation can be driven by env through `SHP_BOOTSTRAP_ADMIN_*`
 - operator auth uses hashed passwords plus bearer session tokens
 - operator actions are role-gated through `platform_admin` and `platform_operator`
-- inventory import reads [`/opt/simplehost/repos/simplehost-platform-config/inventory/apps.yaml`](/opt/simplehost/repos/simplehost-platform-config/inventory/apps.yaml) by default
+- inventory import reads `/etc/spanel/inventory.apps.yaml` by default
+- bootstrap inventory can still be sourced from [`/opt/simplehost/repos/simplehost-platform-config/inventory/apps.yaml`](/opt/simplehost/repos/simplehost-platform-config/inventory/apps.yaml) and copied into `/etc/spanel/inventory.apps.yaml`
 - imported inventory is normalized into tenants, nodes, zones, apps, sites, and databases
+- `proxy.render` for `active-passive` apps now dispatches to both `primary` and `secondary`
 - API endpoints can now dispatch real `proxy.render`, `dns.sync`, `postgres.reconcile`, and `mariadb.reconcile` jobs
 - node enrollment requires `SHP_BOOTSTRAP_ENROLLMENT_TOKEN`
 - each enrolled node receives its own bearer token for subsequent control-plane calls

@@ -223,6 +223,7 @@ export interface InventoryAppSummary {
   tenantSlug: string;
   zoneName: string;
   primaryNodeId: string;
+  standbyNodeId?: string;
   canonicalDomain: string;
   aliases: string[];
   backendPort: number;
@@ -237,6 +238,7 @@ export interface InventoryDatabaseSummary {
   databaseName: string;
   databaseUser: string;
   primaryNodeId: string;
+  standbyNodeId?: string;
   pendingMigrationTo?: "postgresql" | "mariadb";
 }
 
@@ -251,6 +253,7 @@ export interface InventoryStateSnapshot {
 export interface AppReconcileRequest {
   includeDns?: boolean;
   includeProxy?: boolean;
+  includeStandbyProxy?: boolean;
 }
 
 export interface DatabaseReconcileRequest {

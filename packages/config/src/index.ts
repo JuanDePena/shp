@@ -97,7 +97,7 @@ export function createPanelRuntimeConfig(
     inventory: {
       importPath: readString(
         env.SHP_INVENTORY_PATH,
-        "/opt/simplehost/repos/simplehost-platform-config/inventory/apps.yaml"
+        "/etc/spanel/inventory.apps.yaml"
       )
     }
   };

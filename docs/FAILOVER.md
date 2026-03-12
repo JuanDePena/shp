@@ -55,6 +55,7 @@ rsync -a \
   /etc/spanel/api.env.example \
   /etc/spanel/web.env.example \
   /etc/spanel/worker.env.example \
+  /etc/spanel/inventory.apps.yaml \
   root@vps-16535090.vps.ovh.ca:/etc/spanel/
 
 ssh root@vps-16535090.vps.ovh.ca \

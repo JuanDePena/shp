@@ -45,7 +45,11 @@ import {
   verifyPasswordHash,
   type StoredPasswordHash
 } from "./auth.js";
-import { readPlatformInventory } from "./inventory.js";
+import {
+  readPlatformInventory,
+  type PlatformInventoryApp,
+  type PlatformInventoryDocument
+} from "./inventory.js";
 import { runPanelDatabaseMigrations } from "./migrations.js";
 
 interface NodeRow {
@@ -138,6 +142,7 @@ interface InventoryAppRow {
   tenant_slug: string;
   zone_name: string;
   primary_node_id: string;
+  standby_node_id: string | null;
   canonical_domain: string;
   aliases: string[];
   backend_port: number;
@@ -152,6 +157,7 @@ interface InventoryDatabaseRow {
   database_name: string;
   database_user: string;
   primary_node_id: string;
+  standby_node_id: string | null;
   pending_migration_to: "postgresql" | "mariadb" | null;
 }
 
@@ -165,6 +171,8 @@ interface AppDispatchRow {
   app_id: string;
   slug: string;
   primary_node_id: string;
+  standby_node_id: string | null;
+  mode: string;
   zone_name: string;
   canonical_domain: string;
   aliases: string[];
@@ -358,6 +366,7 @@ function toInventoryAppSummary(row: InventoryAppRow): InventoryAppSummary {
     tenantSlug: row.tenant_slug,
     zoneName: row.zone_name,
     primaryNodeId: row.primary_node_id,
+    standbyNodeId: row.standby_node_id ?? undefined,
     canonicalDomain: row.canonical_domain,
     aliases: row.aliases,
     backendPort: row.backend_port,
@@ -374,6 +383,7 @@ function toInventoryDatabaseSummary(row: InventoryDatabaseRow): InventoryDatabas
     databaseName: row.database_name,
     databaseUser: row.database_user,
     primaryNodeId: row.primary_node_id,
+    standbyNodeId: row.standby_node_id ?? undefined,
     pendingMigrationTo: row.pending_migration_to ?? undefined
   };
 }
@@ -900,6 +910,7 @@ async function buildInventorySnapshot(client: PoolClient): Promise<InventoryStat
          tenants.slug AS tenant_slug,
          zones.zone_name,
          apps.primary_node_id,
+         apps.standby_node_id,
          sites.canonical_domain,
          sites.aliases,
          apps.backend_port,
@@ -922,6 +933,7 @@ async function buildInventorySnapshot(client: PoolClient): Promise<InventoryStat
          databases.database_name,
          databases.database_user,
          databases.primary_node_id,
+         databases.standby_node_id,
          databases.pending_migration_to
        FROM shp_databases databases
        INNER JOIN shp_apps apps
@@ -969,6 +981,41 @@ function buildZoneRecords(
       `${right.name}:${right.type}:${right.value}`
     )
   );
+}
+
+function resolveDefaultPrimaryNodeId(inventory: PlatformInventoryDocument): string {
+  return inventory.platform.postgresql_shp.primary_node;
+}
+
+function resolveAppPrimaryNodeId(
+  inventory: PlatformInventoryDocument,
+  app: PlatformInventoryApp
+): string {
+  return app.database.engine === "postgresql"
+    ? inventory.platform.postgresql_apps.primary_node
+    : inventory.platform.mariadb_apps.primary_node;
+}
+
+function resolveAppStandbyNodeId(
+  inventory: PlatformInventoryDocument,
+  app: PlatformInventoryApp
+): string | null {
+  if (app.mode !== "active-passive") {
+    return null;
+  }
+
+  return app.database.engine === "postgresql"
+    ? inventory.platform.postgresql_apps.standby_node
+    : inventory.platform.mariadb_apps.replica_node;
+}
+
+function resolveDatabaseStandbyNodeId(
+  inventory: PlatformInventoryDocument,
+  app: PlatformInventoryApp
+): string | null {
+  return app.database.engine === "postgresql"
+    ? inventory.platform.postgresql_apps.standby_node
+    : inventory.platform.mariadb_apps.replica_node;
 }
 
 async function buildZoneDnsPayload(
@@ -1021,12 +1068,17 @@ async function buildZoneDnsPayload(
 async function buildProxyPayload(
   client: PoolClient,
   appSlug: string
-): Promise<{ nodeId: string; payload: ProxyRenderPayload; zoneName: string }> {
+): Promise<{
+  plans: Array<{ nodeId: string; payload: ProxyRenderPayload }>;
+  zoneName: string;
+}> {
   const result = await client.query<AppDispatchRow>(
     `SELECT
        apps.app_id,
        apps.slug,
        apps.primary_node_id,
+       apps.standby_node_id,
+       apps.mode,
        zones.zone_name,
        sites.canonical_domain,
        sites.aliases,
@@ -1045,16 +1097,34 @@ async function buildProxyPayload(
     throw new Error(`Application ${appSlug} does not exist in SHP inventory.`);
   }
 
-  return {
-    nodeId: app.primary_node_id,
-    zoneName: app.zone_name,
-    payload: {
-      vhostName: app.slug,
-      serverName: app.canonical_domain,
-      serverAliases: app.aliases,
-      documentRoot: `${app.storage_root}/current/public`,
-      tls: true
+  const payload: ProxyRenderPayload = {
+    vhostName: app.slug,
+    serverName: app.canonical_domain,
+    serverAliases: app.aliases,
+    documentRoot: `${app.storage_root}/current/public`,
+    tls: true
+  };
+  const plans = [
+    {
+      nodeId: app.primary_node_id,
+      payload
     }
+  ];
+
+  if (
+    app.mode === "active-passive" &&
+    app.standby_node_id &&
+    app.standby_node_id !== app.primary_node_id
+  ) {
+    plans.push({
+      nodeId: app.standby_node_id,
+      payload
+    });
+  }
+
+  return {
+    zoneName: app.zone_name,
+    plans
   };
 }
 
@@ -1660,12 +1730,19 @@ export async function createPostgresControlPlaneStore(
                tenant_id = EXCLUDED.tenant_id,
                primary_node_id = EXCLUDED.primary_node_id,
                updated_at = EXCLUDED.updated_at`,
-            [`zone-${zoneName}`, tenantId, zoneName, "primary"]
+            [
+              `zone-${zoneName}`,
+              tenantId,
+              zoneName,
+              resolveDefaultPrimaryNodeId(inventory)
+            ]
           );
         }
 
         for (const app of inventory.apps) {
           const appId = `app-${app.slug}`;
+          const appPrimaryNodeId = resolveAppPrimaryNodeId(inventory, app);
+          const appStandbyNodeId = resolveAppStandbyNodeId(inventory, app);
 
           await client.query(
             `INSERT INTO shp_apps (
@@ -1673,20 +1750,22 @@ export async function createPostgresControlPlaneStore(
                tenant_id,
                zone_id,
                primary_node_id,
+               standby_node_id,
                slug,
                runtime_image,
                backend_port,
-               storage_root,
+             storage_root,
                mode,
                created_at,
                updated_at
              )
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
              ON CONFLICT (slug)
              DO UPDATE SET
                tenant_id = EXCLUDED.tenant_id,
                zone_id = EXCLUDED.zone_id,
                primary_node_id = EXCLUDED.primary_node_id,
+               standby_node_id = EXCLUDED.standby_node_id,
                runtime_image = EXCLUDED.runtime_image,
                backend_port = EXCLUDED.backend_port,
                storage_root = EXCLUDED.storage_root,
@@ -1696,7 +1775,8 @@ export async function createPostgresControlPlaneStore(
               appId,
               `tenant-${app.client}`,
               `zone-${app.zone}`,
-              "primary",
+              appPrimaryNodeId,
+              appStandbyNodeId,
               app.slug,
               app.runtime_image,
               app.backend_port,
@@ -1727,24 +1807,27 @@ export async function createPostgresControlPlaneStore(
             app.database.engine === "postgresql"
               ? inventory.platform.postgresql_apps.primary_node
               : inventory.platform.mariadb_apps.primary_node;
+          const databaseStandbyNodeId = resolveDatabaseStandbyNodeId(inventory, app);
 
           await client.query(
             `INSERT INTO shp_databases (
                database_id,
                app_id,
                primary_node_id,
+               standby_node_id,
                engine,
                database_name,
-               database_user,
+             database_user,
                pending_migration_to,
                created_at,
                updated_at
              )
-             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
              ON CONFLICT (engine, database_name)
              DO UPDATE SET
                app_id = EXCLUDED.app_id,
                primary_node_id = EXCLUDED.primary_node_id,
+               standby_node_id = EXCLUDED.standby_node_id,
                database_user = EXCLUDED.database_user,
                pending_migration_to = EXCLUDED.pending_migration_to,
                updated_at = EXCLUDED.updated_at`,
@@ -1752,6 +1835,7 @@ export async function createPostgresControlPlaneStore(
               `database-${app.slug}`,
               appId,
               databasePrimaryNodeId,
+              databaseStandbyNodeId,
               app.database.engine,
               app.database.name,
               app.database.user,
@@ -1857,17 +1941,26 @@ export async function createPostgresControlPlaneStore(
         const jobs: DispatchedJobEnvelope[] = [];
         const includeDns = request.includeDns ?? true;
         const includeProxy = request.includeProxy ?? true;
+        const includeStandbyProxy = request.includeStandbyProxy ?? true;
         const proxyPlan = await buildProxyPayload(client, appSlug);
 
         if (includeProxy) {
-          jobs.push(
-            createDispatchedJobEnvelope(
-              "proxy.render",
-              proxyPlan.nodeId,
-              desiredStateVersion,
-              proxyPlan.payload as unknown as Record<string, unknown>
-            )
-          );
+          const primaryNodeId = proxyPlan.plans[0]?.nodeId;
+
+          for (const plan of proxyPlan.plans) {
+            if (!includeStandbyProxy && plan.nodeId !== primaryNodeId) {
+              continue;
+            }
+
+            jobs.push(
+              createDispatchedJobEnvelope(
+                "proxy.render",
+                plan.nodeId,
+                desiredStateVersion,
+                plan.payload as unknown as Record<string, unknown>
+              )
+            );
+          }
         }
 
         if (includeDns) {

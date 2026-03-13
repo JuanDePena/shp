@@ -918,13 +918,13 @@ ${renderBaseStyleBlock()}
 
       .topbar {
         position: relative;
-        padding: 0.85rem 1.1rem;
+        padding: 0.55rem 0.85rem;
         border: 1px solid var(--line);
         border-radius: 1.3rem;
         background: rgba(255, 255, 255, 0.78);
         backdrop-filter: blur(14px);
         box-shadow: 0 1rem 2.2rem rgba(16, 39, 68, 0.08);
-        min-height: 5.25rem;
+        min-height: 4rem;
       }
 
       .topbar,
@@ -936,8 +936,8 @@ ${renderBaseStyleBlock()}
         display: flex;
         justify-content: space-between;
         align-items: center;
-        gap: 1rem;
-        min-height: 3.25rem;
+        gap: 0.75rem;
+        min-height: 2.85rem;
       }
 
       .topbar-spacer {
@@ -949,7 +949,7 @@ ${renderBaseStyleBlock()}
         display: flex;
         flex-wrap: nowrap;
         align-items: center;
-        gap: 0.75rem;
+        gap: 0.55rem;
         margin-left: auto;
       }
 
@@ -959,10 +959,10 @@ ${renderBaseStyleBlock()}
       }
 
       .topbar-actions select {
-        width: 4.6rem;
-        min-width: 4.6rem;
-        min-height: 2.9rem;
-        padding-inline: 0.8rem 1.9rem;
+        width: 4.2rem;
+        min-width: 4.2rem;
+        min-height: 2.65rem;
+        padding-inline: 0.72rem 1.7rem;
       }
 
       .topbar-disclosure {
@@ -970,9 +970,9 @@ ${renderBaseStyleBlock()}
       }
 
       .icon-button {
-        width: 2.95rem;
-        min-width: 2.95rem;
-        height: 2.95rem;
+        width: 2.7rem;
+        min-width: 2.7rem;
+        height: 2.7rem;
         padding: 0;
         border-radius: 999px;
       }
@@ -997,11 +997,11 @@ ${renderBaseStyleBlock()}
 
       .topbar-panel {
         position: absolute;
-        top: calc(100% + 0.8rem);
+        top: calc(100% + 0.55rem);
         right: 0;
         z-index: 20;
-        width: min(24rem, calc(100vw - 3rem));
-        padding: 1rem;
+        width: min(22rem, calc(100vw - 2.4rem));
+        padding: 0.9rem;
         border: 1px solid rgba(13, 32, 56, 0.12);
         border-radius: 1.2rem;
         background: rgba(255, 255, 255, 0.97);
@@ -1010,7 +1010,7 @@ ${renderBaseStyleBlock()}
 
       .profile-sheet {
         display: grid;
-        gap: 1rem;
+        gap: 0.9rem;
       }
 
       .profile-sheet-head {
@@ -1022,6 +1022,27 @@ ${renderBaseStyleBlock()}
       .profile-sheet-copy {
         display: grid;
         gap: 0.15rem;
+      }
+
+      .profile-sheet-footer {
+        padding-top: 0.2rem;
+        border-top: 1px solid rgba(13, 32, 56, 0.08);
+      }
+
+      .profile-sheet-footer form {
+        margin: 0;
+      }
+
+      .profile-sheet-signout {
+        width: 100%;
+        justify-content: center;
+        gap: 0.5rem;
+        min-height: 2.7rem;
+      }
+
+      .profile-sheet-signout svg {
+        width: 1rem;
+        height: 1rem;
       }
 
       .profile-card {

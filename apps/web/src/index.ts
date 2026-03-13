@@ -2364,6 +2364,19 @@ function renderDashboard(
         value: escapeHtml(tenantMemberships)
       }
     ])}
+    <div class="profile-sheet-footer">
+      <form method="post" action="/auth/logout">
+        <button
+          class="danger profile-sheet-signout"
+          type="submit"
+          aria-label="${escapeHtml(copy.signOutLabel)}"
+          title="${escapeHtml(copy.signOutLabel)}"
+        >
+          ${renderSignOutIconSvg()}
+          <span>${escapeHtml(copy.signOutLabel)}</span>
+        </button>
+      </form>
+    </div>
   </div>`;
 
   const topbarActionsHtml = `<form method="post" action="/preferences/locale" class="inline-form">
@@ -2394,18 +2407,7 @@ function renderDashboard(
     <aside class="topbar-panel" data-topbar-panel hidden>
       ${topbarUserPanelHtml}
     </aside>
-  </div>
-  <form method="post" action="/auth/logout" class="inline-form">
-    <button
-      class="danger icon-button"
-      type="submit"
-      aria-label="${escapeHtml(copy.signOutLabel)}"
-      title="${escapeHtml(copy.signOutLabel)}"
-    >
-      ${renderSignOutIconSvg()}
-      <span class="sr-only">${escapeHtml(copy.signOutLabel)}</span>
-    </button>
-  </form>`;
+  </div>`;
 
   const sidebarGroups: AdminNavGroup[] = [
     {

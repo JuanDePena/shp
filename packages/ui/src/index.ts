@@ -914,17 +914,18 @@ ${renderBaseStyleBlock()}
         min-width: 0;
         display: grid;
         gap: 1rem;
+        align-content: start;
       }
 
       .topbar {
         position: relative;
-        padding: 0.18rem 0.6rem;
+        padding: 0.28rem 0.6rem 0.06rem;
         border: 1px solid var(--line);
         border-radius: 1.05rem;
         background: rgba(255, 255, 255, 0.78);
         backdrop-filter: blur(14px);
         box-shadow: 0 0.7rem 1.8rem rgba(16, 39, 68, 0.07);
-        min-height: 2.35rem;
+        min-height: 0;
       }
 
       .topbar,
@@ -937,7 +938,7 @@ ${renderBaseStyleBlock()}
         justify-content: space-between;
         align-items: center;
         gap: 0.55rem;
-        min-height: 1.95rem;
+        min-height: 0;
       }
 
       .topbar-spacer {

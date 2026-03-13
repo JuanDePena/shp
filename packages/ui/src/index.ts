@@ -918,13 +918,13 @@ ${renderBaseStyleBlock()}
 
       .topbar {
         position: relative;
-        padding: 0.55rem 0.85rem;
+        padding: 0.18rem 0.6rem;
         border: 1px solid var(--line);
-        border-radius: 1.3rem;
+        border-radius: 1.05rem;
         background: rgba(255, 255, 255, 0.78);
         backdrop-filter: blur(14px);
-        box-shadow: 0 1rem 2.2rem rgba(16, 39, 68, 0.08);
-        min-height: 4rem;
+        box-shadow: 0 0.7rem 1.8rem rgba(16, 39, 68, 0.07);
+        min-height: 2.35rem;
       }
 
       .topbar,
@@ -936,8 +936,8 @@ ${renderBaseStyleBlock()}
         display: flex;
         justify-content: space-between;
         align-items: center;
-        gap: 0.75rem;
-        min-height: 2.85rem;
+        gap: 0.55rem;
+        min-height: 1.95rem;
       }
 
       .topbar-spacer {
@@ -949,7 +949,7 @@ ${renderBaseStyleBlock()}
         display: flex;
         flex-wrap: nowrap;
         align-items: center;
-        gap: 0.55rem;
+        gap: 0.4rem;
         margin-left: auto;
       }
 
@@ -959,10 +959,11 @@ ${renderBaseStyleBlock()}
       }
 
       .topbar-actions select {
-        width: 4.2rem;
-        min-width: 4.2rem;
-        min-height: 2.65rem;
-        padding-inline: 0.72rem 1.7rem;
+        width: 4.95rem;
+        min-width: 4.95rem;
+        min-height: 2.2rem;
+        padding-inline: 0.65rem 1.6rem;
+        text-align-last: center;
       }
 
       .topbar-disclosure {
@@ -970,16 +971,16 @@ ${renderBaseStyleBlock()}
       }
 
       .icon-button {
-        width: 2.7rem;
-        min-width: 2.7rem;
-        height: 2.7rem;
+        width: 2.2rem;
+        min-width: 2.2rem;
+        height: 2.2rem;
         padding: 0;
         border-radius: 999px;
       }
 
       .icon-button svg {
-        width: 1.15rem;
-        height: 1.15rem;
+        width: 1rem;
+        height: 1rem;
         display: block;
       }
 
@@ -1354,7 +1355,10 @@ ${renderBaseStyleBlock()}
           padding: 0.75rem;
         }
 
-        .topbar,
+        .topbar {
+          padding: 0.45rem 0.6rem;
+        }
+
         .panel {
           padding: 1rem;
         }

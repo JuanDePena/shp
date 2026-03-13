@@ -2354,7 +2354,6 @@ function renderDashboard(
       </div>
     </div>
     ${renderDetailGrid([
-      { label: copy.emailLabel, value: escapeHtml(data.currentUser.email) },
       {
         label: copy.globalRoles,
         value: escapeHtml(formatList(data.currentUser.globalRoles, copy.none))

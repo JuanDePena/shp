@@ -119,6 +119,10 @@ interface WebCopy {
   actionsRunReconciliation: string;
   actionsImportInventory: string;
   actionsDownloadYaml: string;
+  actionDispatchDnsSync: string;
+  actionFullReconcile: string;
+  actionDispatchProxyRender: string;
+  actionDispatchDatabaseReconcile: string;
   actionPlanDescription: string;
   actionImportDescription: string;
   actionExportDescription: string;
@@ -155,6 +159,13 @@ interface WebCopy {
   desiredStateInventoryDescription: string;
   desiredStateEditorsTitle: string;
   desiredStateEditorsDescription: string;
+  selectedResourceTitle: string;
+  selectedResourceDescription: string;
+  selectedStateLabel: string;
+  detailActionsTitle: string;
+  recordPreviewTitle: string;
+  appRuntimeTitle: string;
+  databaseAccessTitle: string;
   dataFilterPlaceholder: string;
   rowsPerPage: string;
   showing: string;
@@ -180,6 +191,14 @@ interface WebCopy {
   appColDomain: string;
   appColMode: string;
   appColNodes: string;
+  recordColName: string;
+  recordColType: string;
+  recordColValue: string;
+  recordColTtl: string;
+  aliasesLabel: string;
+  backendPortLabel: string;
+  runtimeImageLabel: string;
+  storageRootLabel: string;
   databaseColApp: string;
   databaseColEngine: string;
   databaseColDatabase: string;
@@ -264,6 +283,10 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     actionsRunReconciliation: "Run reconciliation",
     actionsImportInventory: "Import YAML inventory",
     actionsDownloadYaml: "Download desired-state YAML",
+    actionDispatchDnsSync: "Dispatch dns.sync",
+    actionFullReconcile: "Full reconcile",
+    actionDispatchProxyRender: "Dispatch proxy.render",
+    actionDispatchDatabaseReconcile: "Dispatch database reconcile",
     actionPlanDescription: "Compare desired state against the last successful apply and dispatch missing work.",
     actionImportDescription: "Refresh PostgreSQL desired state from the bootstrap YAML inventory path.",
     actionExportDescription: "Export the current desired state for audit, review, or disaster recovery.",
@@ -300,6 +323,13 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     desiredStateInventoryDescription: "Read the current desired-state catalog before editing individual records.",
     desiredStateEditorsTitle: "Configuration editors",
     desiredStateEditorsDescription: "Apply changes through the product forms below. Each save writes back to PostgreSQL desired state.",
+    selectedResourceTitle: "Selected resource",
+    selectedResourceDescription: "Use the inventory table to change focus and run actions against a single resource.",
+    selectedStateLabel: "Selected",
+    detailActionsTitle: "Context actions",
+    recordPreviewTitle: "Record preview",
+    appRuntimeTitle: "Runtime and routing",
+    databaseAccessTitle: "Topology and access",
     dataFilterPlaceholder: "Filter records",
     rowsPerPage: "Rows per page",
     showing: "Showing",
@@ -325,6 +355,14 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     appColDomain: "Domain",
     appColMode: "Mode",
     appColNodes: "Nodes",
+    recordColName: "Name",
+    recordColType: "Type",
+    recordColValue: "Value",
+    recordColTtl: "TTL",
+    aliasesLabel: "Aliases",
+    backendPortLabel: "Backend port",
+    runtimeImageLabel: "Runtime image",
+    storageRootLabel: "Storage root",
     databaseColApp: "App",
     databaseColEngine: "Engine",
     databaseColDatabase: "Database",
@@ -407,6 +445,10 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     actionsRunReconciliation: "Ejecutar reconciliación",
     actionsImportInventory: "Importar inventario YAML",
     actionsDownloadYaml: "Descargar YAML del estado deseado",
+    actionDispatchDnsSync: "Despachar dns.sync",
+    actionFullReconcile: "Reconciliación completa",
+    actionDispatchProxyRender: "Despachar proxy.render",
+    actionDispatchDatabaseReconcile: "Despachar reconcile de base de datos",
     actionPlanDescription: "Compara el estado deseado contra la última aplicación exitosa y despacha el trabajo faltante.",
     actionImportDescription: "Refresca el estado deseado en PostgreSQL desde la ruta actual del inventario YAML.",
     actionExportDescription: "Exporta el estado deseado actual para auditoría, revisión o recuperación.",
@@ -443,6 +485,13 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     desiredStateInventoryDescription: "Revisa el catálogo actual del estado deseado antes de editar registros individuales.",
     desiredStateEditorsTitle: "Editores de configuración",
     desiredStateEditorsDescription: "Aplica cambios mediante los formularios del producto. Cada guardado vuelve a escribir PostgreSQL como estado deseado.",
+    selectedResourceTitle: "Recurso seleccionado",
+    selectedResourceDescription: "Usa la tabla de inventario para cambiar el foco y ejecutar acciones sobre un recurso puntual.",
+    selectedStateLabel: "Seleccionado",
+    detailActionsTitle: "Acciones contextuales",
+    recordPreviewTitle: "Vista de registros",
+    appRuntimeTitle: "Runtime y enrutamiento",
+    databaseAccessTitle: "Topología y acceso",
     dataFilterPlaceholder: "Filtrar registros",
     rowsPerPage: "Filas por página",
     showing: "Mostrando",
@@ -468,6 +517,14 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     appColDomain: "Dominio",
     appColMode: "Modo",
     appColNodes: "Nodos",
+    recordColName: "Nombre",
+    recordColType: "Tipo",
+    recordColValue: "Valor",
+    recordColTtl: "TTL",
+    aliasesLabel: "Aliases",
+    backendPortLabel: "Puerto backend",
+    runtimeImageLabel: "Imagen runtime",
+    storageRootLabel: "Raíz de storage",
     databaseColApp: "App",
     databaseColEngine: "Motor",
     databaseColDatabase: "Base",
@@ -664,9 +721,15 @@ function normalizeDesiredStateTab(value: string | null | undefined): DesiredStat
   return desiredStateTabIds.find((candidate) => candidate === value) ?? "desired-state-create";
 }
 
+function normalizeDesiredStateFocus(value: string | null | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+}
+
 function buildDashboardViewUrl(
   view: DashboardView,
-  tab?: DesiredStateTabId
+  tab?: DesiredStateTabId,
+  focus?: string
 ): string {
   const search = new URLSearchParams();
 
@@ -676,6 +739,9 @@ function buildDashboardViewUrl(
 
   if (view === "desired-state") {
     search.set("tab", tab ?? "desired-state-create");
+    if (focus) {
+      search.set("focus", focus);
+    }
   }
 
   const query = search.toString();
@@ -978,6 +1044,44 @@ function renderStats(
   )}</p>`;
 }
 
+function renderDetailGrid(
+  entries: Array<{ label: string; value: string }>
+): string {
+  return `<dl class="detail-grid">
+    ${entries
+      .map(
+        (entry) => `<div class="detail-item">
+          <dt>${escapeHtml(entry.label)}</dt>
+          <dd>${entry.value}</dd>
+        </div>`
+      )
+      .join("")}
+  </dl>`;
+}
+
+function renderActionForm(action: string, hiddenFields: Record<string, string>, label: string): string {
+  return `<form method="post" action="${escapeHtml(action)}" class="inline-form">
+    ${Object.entries(hiddenFields)
+      .map(
+        ([name, value]) =>
+          `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}" />`
+      )
+      .join("")}
+    <button class="secondary" type="submit">${escapeHtml(label)}</button>
+  </form>`;
+}
+
+function renderFocusLink(
+  label: string,
+  href: string,
+  active: boolean,
+  activeLabel: string
+): string {
+  return `<a href="${escapeHtml(href)}" class="mono detail-link">${escapeHtml(label)}</a>${
+    active ? ` ${renderPill(activeLabel, "success")}` : ""
+  }`;
+}
+
 function renderLoginPage(locale: WebLocale, notice?: PanelNotice): string {
   const copy = copyByLocale[locale];
 
@@ -1007,7 +1111,8 @@ function renderLoginPage(locale: WebLocale, notice?: PanelNotice): string {
 function renderDesiredStateSection(
   data: DashboardData,
   copy: WebCopy,
-  defaultTabId: DesiredStateTabId
+  defaultTabId: DesiredStateTabId,
+  focus?: string
 ): string {
   const tenantOptions = data.desiredState.spec.tenants.map((tenant) => ({
     value: tenant.slug,
@@ -1025,6 +1130,27 @@ function renderDesiredStateSection(
     value: app.slug,
     label: `${app.slug} · ${app.canonicalDomain}`
   }));
+  const selectedZone =
+    defaultTabId === "desired-state-zones"
+      ? data.desiredState.spec.zones.find((zone) => zone.zoneName === focus) ??
+        data.desiredState.spec.zones[0]
+      : undefined;
+  const selectedApp =
+    defaultTabId === "desired-state-apps"
+      ? data.desiredState.spec.apps.find((app) => app.slug === focus) ??
+        data.desiredState.spec.apps[0]
+      : undefined;
+  const selectedDatabase =
+    defaultTabId === "desired-state-databases"
+      ? data.desiredState.spec.databases.find(
+          (database) =>
+            database.appSlug === focus ||
+            `${database.engine}:${database.databaseName}` === focus
+        ) ?? data.desiredState.spec.databases[0]
+      : undefined;
+  const selectedDatabaseApp = selectedDatabase
+    ? data.desiredState.spec.apps.find((app) => app.slug === selectedDatabase.appSlug)
+    : undefined;
   const renderEditorPanel = (
     id: string,
     rowsHtml: string,
@@ -1061,7 +1187,12 @@ function renderDesiredStateSection(
   }));
   const zoneTableRows: DataTableRow[] = data.desiredState.spec.zones.map((zone) => ({
     cells: [
-      `<span class="mono">${escapeHtml(zone.zoneName)}</span>`,
+      renderFocusLink(
+        zone.zoneName,
+        buildDashboardViewUrl("desired-state", "desired-state-zones", zone.zoneName),
+        selectedZone?.zoneName === zone.zoneName,
+        copy.selectedStateLabel
+      ),
       escapeHtml(zone.tenantSlug),
       `<span class="mono">${escapeHtml(zone.primaryNodeId)}</span>`,
       renderPill(String(zone.records.length), zone.records.length > 0 ? "success" : "muted")
@@ -1075,7 +1206,12 @@ function renderDesiredStateSection(
   }));
   const appTableRows: DataTableRow[] = data.desiredState.spec.apps.map((app) => ({
     cells: [
-      `<span class="mono">${escapeHtml(app.slug)}</span>`,
+      renderFocusLink(
+        app.slug,
+        buildDashboardViewUrl("desired-state", "desired-state-apps", app.slug),
+        selectedApp?.slug === app.slug,
+        copy.selectedStateLabel
+      ),
       escapeHtml(app.tenantSlug),
       escapeHtml(app.canonicalDomain),
       renderPill(app.mode, app.mode === "active-active" ? "success" : "muted"),
@@ -1096,7 +1232,12 @@ function renderDesiredStateSection(
   }));
   const databaseTableRows: DataTableRow[] = data.desiredState.spec.databases.map((database) => ({
     cells: [
-      `<span class="mono">${escapeHtml(database.appSlug)}</span>`,
+      renderFocusLink(
+        database.appSlug,
+        buildDashboardViewUrl("desired-state", "desired-state-databases", database.appSlug),
+        selectedDatabase?.appSlug === database.appSlug,
+        copy.selectedStateLabel
+      ),
       escapeHtml(database.engine),
       `<span class="mono">${escapeHtml(database.databaseName)}</span>`,
       `<span class="mono">${escapeHtml(database.databaseUser)}</span>`,
@@ -1388,6 +1529,215 @@ function renderDesiredStateSection(
     )
     .join("");
 
+  const zoneDetailPanel = selectedZone
+    ? `<article class="panel detail-shell">
+        <div class="section-head">
+          <div>
+            <h3>${escapeHtml(copy.selectedResourceTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.selectedResourceDescription)}</p>
+          </div>
+        </div>
+        <div>
+          <h3>${escapeHtml(selectedZone.zoneName)}</h3>
+          <p class="muted">${escapeHtml(selectedZone.tenantSlug)}</p>
+        </div>
+        ${renderDetailGrid([
+          { label: copy.zoneColTenant, value: escapeHtml(selectedZone.tenantSlug) },
+          {
+            label: copy.zoneColPrimaryNode,
+            value: `<span class="mono">${escapeHtml(selectedZone.primaryNodeId)}</span>`
+          },
+          {
+            label: copy.zoneColRecordCount,
+            value: renderPill(
+              String(selectedZone.records.length),
+              selectedZone.records.length > 0 ? "success" : "muted"
+            )
+          }
+        ])}
+        <div class="section-head">
+          <div>
+            <h3>${escapeHtml(copy.recordPreviewTitle)}</h3>
+          </div>
+          <div class="toolbar">
+            ${renderActionForm(
+              "/actions/zone-sync",
+              { zoneName: selectedZone.zoneName },
+              copy.actionDispatchDnsSync
+            )}
+          </div>
+        </div>
+        ${
+          selectedZone.records.length > 0
+            ? `<div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>${escapeHtml(copy.recordColName)}</th>
+                      <th>${escapeHtml(copy.recordColType)}</th>
+                      <th>${escapeHtml(copy.recordColValue)}</th>
+                      <th>${escapeHtml(copy.recordColTtl)}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${selectedZone.records
+                      .map(
+                        (record) => `<tr>
+                          <td class="mono">${escapeHtml(record.name)}</td>
+                          <td>${escapeHtml(record.type)}</td>
+                          <td class="mono">${escapeHtml(record.value)}</td>
+                          <td>${escapeHtml(String(record.ttl))}</td>
+                        </tr>`
+                      )
+                      .join("")}
+                  </tbody>
+                </table>
+              </div>`
+            : `<p class="empty">${escapeHtml(copy.noZones)}</p>`
+        }
+      </article>`
+    : "";
+
+  const appDetailPanel = selectedApp
+    ? `<article class="panel detail-shell">
+        <div class="section-head">
+          <div>
+            <h3>${escapeHtml(copy.selectedResourceTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.selectedResourceDescription)}</p>
+          </div>
+        </div>
+        <div>
+          <h3>${escapeHtml(selectedApp.slug)}</h3>
+          <p class="muted">${escapeHtml(selectedApp.canonicalDomain)}</p>
+        </div>
+        ${renderDetailGrid([
+          { label: copy.appColTenant, value: escapeHtml(selectedApp.tenantSlug) },
+          {
+            label: copy.appColMode,
+            value: renderPill(
+              selectedApp.mode,
+              selectedApp.mode === "active-active" ? "success" : "muted"
+            )
+          },
+          {
+            label: copy.backendPortLabel,
+            value: `<span class="mono">${escapeHtml(String(selectedApp.backendPort))}</span>`
+          },
+          {
+            label: copy.appColNodes,
+            value: `<span class="mono">${escapeHtml(
+              selectedApp.standbyNodeId
+                ? `${selectedApp.primaryNodeId} -> ${selectedApp.standbyNodeId}`
+                : selectedApp.primaryNodeId
+            )}</span>`
+          }
+        ])}
+        <div class="grid grid-two">
+          <article class="panel">
+            <h3>${escapeHtml(copy.appRuntimeTitle)}</h3>
+            ${renderDetailGrid([
+              {
+                label: copy.runtimeImageLabel,
+                value: `<span class="mono">${escapeHtml(selectedApp.runtimeImage)}</span>`
+              },
+              {
+                label: copy.storageRootLabel,
+                value: `<span class="mono">${escapeHtml(selectedApp.storageRoot)}</span>`
+              },
+              {
+                label: copy.aliasesLabel,
+                value: escapeHtml(
+                  selectedApp.aliases.length > 0 ? selectedApp.aliases.join(", ") : copy.none
+                )
+              },
+              { label: copy.appColDomain, value: escapeHtml(selectedApp.canonicalDomain) }
+            ])}
+          </article>
+          <article class="panel">
+            <h3>${escapeHtml(copy.detailActionsTitle)}</h3>
+            <div class="toolbar">
+              ${renderActionForm(
+                "/actions/app-reconcile",
+                { slug: selectedApp.slug },
+                copy.actionFullReconcile
+              )}
+              ${renderActionForm(
+                "/actions/app-render-proxy",
+                { slug: selectedApp.slug },
+                copy.actionDispatchProxyRender
+              )}
+            </div>
+          </article>
+        </div>
+      </article>`
+    : "";
+
+  const databaseDetailPanel = selectedDatabase
+    ? `<article class="panel detail-shell">
+        <div class="section-head">
+          <div>
+            <h3>${escapeHtml(copy.selectedResourceTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.selectedResourceDescription)}</p>
+          </div>
+        </div>
+        <div>
+          <h3>${escapeHtml(selectedDatabase.databaseName)}</h3>
+          <p class="muted">${escapeHtml(selectedDatabase.appSlug)}</p>
+        </div>
+        ${renderDetailGrid([
+          { label: copy.databaseColApp, value: escapeHtml(selectedDatabase.appSlug) },
+          { label: copy.databaseColEngine, value: escapeHtml(selectedDatabase.engine) },
+          {
+            label: copy.databaseColUser,
+            value: `<span class="mono">${escapeHtml(selectedDatabase.databaseUser)}</span>`
+          },
+          {
+            label: copy.databaseColMigration,
+            value: selectedDatabase.pendingMigrationTo
+              ? renderPill(selectedDatabase.pendingMigrationTo, "danger")
+              : renderPill(copy.none, "muted")
+          }
+        ])}
+        <div class="grid grid-two">
+          <article class="panel">
+            <h3>${escapeHtml(copy.databaseAccessTitle)}</h3>
+            ${renderDetailGrid([
+              {
+                label: copy.databaseColNodes,
+                value: `<span class="mono">${escapeHtml(
+                  selectedDatabase.standbyNodeId
+                    ? `${selectedDatabase.primaryNodeId} -> ${selectedDatabase.standbyNodeId}`
+                    : selectedDatabase.primaryNodeId
+                )}</span>`
+              },
+              {
+                label: copy.appColDomain,
+                value: escapeHtml(selectedDatabaseApp?.canonicalDomain ?? copy.none)
+              },
+              {
+                label: copy.databaseColDatabase,
+                value: `<span class="mono">${escapeHtml(selectedDatabase.databaseName)}</span>`
+              },
+              {
+                label: copy.databaseColUser,
+                value: `<span class="mono">${escapeHtml(selectedDatabase.databaseUser)}</span>`
+              }
+            ])}
+          </article>
+          <article class="panel">
+            <h3>${escapeHtml(copy.detailActionsTitle)}</h3>
+            <div class="toolbar">
+              ${renderActionForm(
+                "/actions/database-reconcile",
+                { appSlug: selectedDatabase.appSlug },
+                copy.actionDispatchDatabaseReconcile
+              )}
+            </div>
+          </article>
+        </div>
+      </article>`
+    : "";
+
   const createPanelHtml = `<div class="grid grid-two">
       <article class="panel">
         <h3>Create tenant</h3>
@@ -1668,6 +2018,7 @@ function renderDesiredStateSection(
           recordsLabel: copy.records,
           defaultPageSize: 10
         })}
+        ${zoneDetailPanel}
         ${renderEditorPanel("desired-state-zones-editors", zoneRows, copy.noZones)}
       </div>`
     },
@@ -1697,6 +2048,7 @@ function renderDesiredStateSection(
           recordsLabel: copy.records,
           defaultPageSize: 10
         })}
+        ${appDetailPanel}
         ${renderEditorPanel("desired-state-apps-editors", appRows, copy.noApps)}
       </div>`
     },
@@ -1727,6 +2079,7 @@ function renderDesiredStateSection(
           recordsLabel: copy.records,
           defaultPageSize: 10
         })}
+        ${databaseDetailPanel}
         ${renderEditorPanel("desired-state-databases-editors", databaseRows, copy.noDatabases)}
       </div>`
     },
@@ -1776,6 +2129,7 @@ function renderDashboard(
   currentPath: string,
   view: DashboardView,
   desiredStateTab: DesiredStateTabId,
+  desiredStateFocus: string | undefined,
   notice?: PanelNotice
 ): string {
   const copy = copyByLocale[locale];
@@ -1987,9 +2341,9 @@ function renderDashboard(
     <form method="post" action="/preferences/locale" class="inline-form">
       <input type="hidden" name="returnTo" value="${escapeHtml(currentPath)}" />
       <label>
-        <span>${escapeHtml(copy.languageLabel)}</span>
         <select
           name="locale"
+          aria-label="${escapeHtml(copy.languageLabel)}"
           onchange="const returnTo=this.form.querySelector('[name=returnTo]'); if (returnTo instanceof HTMLInputElement) { returnTo.value = window.location.pathname + window.location.search + window.location.hash; } this.form.submit();"
         >
           <option value="es"${locale === "es" ? " selected" : ""}>ES</option>
@@ -2213,7 +2567,12 @@ function renderDashboard(
     defaultPageSize: 10
   });
 
-  const desiredStateSection = renderDesiredStateSection(data, copy, desiredStateTab);
+  const desiredStateSection = renderDesiredStateSection(
+    data,
+    copy,
+    desiredStateTab,
+    desiredStateFocus
+  );
 
   const body = (() => {
     switch (view) {
@@ -2440,6 +2799,7 @@ async function handleDashboard(request: IncomingMessage, response: ServerRespons
   const locale = readLocale(request);
   const view = normalizeDashboardView(url.searchParams.get("view"));
   const desiredStateTab = normalizeDesiredStateTab(url.searchParams.get("tab"));
+  const desiredStateFocus = normalizeDesiredStateFocus(url.searchParams.get("focus"));
 
   if (!token) {
     writeHtml(response, 200, renderLoginPage(locale, getNoticeFromUrl(url)));
@@ -2457,6 +2817,7 @@ async function handleDashboard(request: IncomingMessage, response: ServerRespons
         sanitizeReturnTo(`${url.pathname}${url.search}`),
         view,
         desiredStateTab,
+        desiredStateFocus,
         getNoticeFromUrl(url)
       )
     );

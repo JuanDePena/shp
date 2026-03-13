@@ -302,6 +302,47 @@ function renderBaseStyleBlock(): string {
         font-size: 1.2rem;
       }
 
+      .detail-shell {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+        gap: 0.85rem;
+        margin: 0;
+      }
+
+      .detail-item {
+        padding: 0.9rem 1rem;
+        border: 1px solid rgba(13, 32, 56, 0.08);
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .detail-item dt {
+        color: var(--muted);
+        font-size: 0.76rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+
+      .detail-item dd {
+        margin: 0.35rem 0 0;
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      .detail-link {
+        color: var(--navy-strong);
+        font-weight: 600;
+      }
+
+      .detail-link:hover {
+        color: var(--navy-soft);
+      }
+
       .stats {
         display: grid;
         gap: 0.9rem;

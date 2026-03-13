@@ -229,6 +229,10 @@ function renderBaseStyleBlock(): string {
         resize: vertical;
       }
 
+      [hidden] {
+        display: none !important;
+      }
+
       .notice {
         padding: 0.85rem 1rem;
         border-radius: 1rem;
@@ -1227,7 +1231,6 @@ ${renderBaseStyleBlock()}
     <div class="admin-shell">
       <aside class="admin-sidebar">
         <div class="sidebar-brand">
-          <p class="sidebar-eyebrow">${escapeHtml(props.eyebrow ?? "SimpleHostPanel")}</p>
           <strong>${escapeHtml(props.appName)}</strong>
         </div>
         <label class="sidebar-search">
@@ -1245,7 +1248,6 @@ ${renderBaseStyleBlock()}
       <div class="admin-main">
         <header class="topbar">${props.topbarHtml}</header>
         <section class="page-header">
-          <p class="page-eyebrow">${escapeHtml(props.eyebrow ?? "SimpleHost control plane")}</p>
           <h1>${escapeHtml(props.heading)}</h1>
           ${
             props.subheading

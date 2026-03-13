@@ -1762,12 +1762,6 @@ function renderDesiredStateSection(
   ];
 
   return `<section id="section-desired-state" class="panel section-panel">
-    <div class="section-head">
-      <div>
-        <h2>${escapeHtml(copy.desiredStateTitle)}</h2>
-        <p class="muted section-description">${escapeHtml(copy.desiredStateDescription)}</p>
-      </div>
-    </div>
     ${renderTabs({
       id: "desired-state-tabs",
       tabs,
@@ -1985,7 +1979,6 @@ function renderDashboard(
   const topbarHtml = `<div class="profile-card">
     <span class="profile-avatar">${escapeHtml(getInitials(data.currentUser.displayName))}</span>
     <div class="profile-copy">
-      <span class="profile-kicker">${escapeHtml(copy.eyebrow)}</span>
       <strong class="profile-name">${escapeHtml(data.currentUser.displayName)}</strong>
       <span class="profile-meta">${escapeHtml(data.currentUser.email)}</span>
     </div>

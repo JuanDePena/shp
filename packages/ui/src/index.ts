@@ -36,12 +36,16 @@ export interface AdminShellProps {
   eyebrow?: string;
   subheading?: string;
   body: string;
-  topbarHtml: string;
+  topbar: AdminTopbarProps;
   versionLabel: string;
   versionValue: string;
   sidebarSearchPlaceholder: string;
   sidebarGroups: AdminNavGroup[];
   notice?: PanelNotice;
+}
+
+export interface AdminTopbarProps {
+  actionsHtml: string;
 }
 
 export interface TabItem {
@@ -709,6 +713,15 @@ export function renderDataTable(props: DataTableProps): string {
   </section>`;
 }
 
+export function renderAdminTopbar(props: AdminTopbarProps): string {
+  return `<header class="topbar">
+    <div class="topbar-bar">
+      <div class="topbar-spacer"></div>
+      <div class="topbar-actions">${props.actionsHtml}</div>
+    </div>
+  </header>`;
+}
+
 export function renderAdminShell(props: AdminShellProps): string {
   const noticeHtml = renderNotice(props.notice);
   const sidebarGroupsHtml = props.sidebarGroups
@@ -904,16 +917,14 @@ ${renderBaseStyleBlock()}
       }
 
       .topbar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 1rem;
-        padding: 1rem 1.2rem;
+        position: relative;
+        padding: 0.85rem 1.1rem;
         border: 1px solid var(--line);
         border-radius: 1.3rem;
         background: rgba(255, 255, 255, 0.78);
         backdrop-filter: blur(14px);
         box-shadow: 0 1rem 2.2rem rgba(16, 39, 68, 0.08);
+        min-height: 5.25rem;
       }
 
       .topbar,
@@ -921,11 +932,25 @@ ${renderBaseStyleBlock()}
         color: var(--ink);
       }
 
+      .topbar-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        min-height: 3.25rem;
+      }
+
+      .topbar-spacer {
+        flex: 1;
+        min-width: 0;
+      }
+
       .topbar-actions {
         display: flex;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         align-items: center;
         gap: 0.75rem;
+        margin-left: auto;
       }
 
       .topbar-actions form,
@@ -934,7 +959,69 @@ ${renderBaseStyleBlock()}
       }
 
       .topbar-actions select {
-        min-width: 5rem;
+        width: 4.6rem;
+        min-width: 4.6rem;
+        min-height: 2.9rem;
+        padding-inline: 0.8rem 1.9rem;
+      }
+
+      .topbar-disclosure {
+        position: relative;
+      }
+
+      .icon-button {
+        width: 2.95rem;
+        min-width: 2.95rem;
+        height: 2.95rem;
+        padding: 0;
+        border-radius: 999px;
+      }
+
+      .icon-button svg {
+        width: 1.15rem;
+        height: 1.15rem;
+        display: block;
+      }
+
+      .icon-button.secondary {
+        background: rgba(16, 39, 68, 0.08);
+        color: var(--navy-strong);
+        border: 1px solid rgba(13, 32, 56, 0.12);
+        box-shadow: none;
+      }
+
+      .icon-button.secondary:hover,
+      .icon-button.secondary:focus-visible {
+        background: rgba(16, 39, 68, 0.14);
+      }
+
+      .topbar-panel {
+        position: absolute;
+        top: calc(100% + 0.8rem);
+        right: 0;
+        z-index: 20;
+        width: min(24rem, calc(100vw - 3rem));
+        padding: 1rem;
+        border: 1px solid rgba(13, 32, 56, 0.12);
+        border-radius: 1.2rem;
+        background: rgba(255, 255, 255, 0.97);
+        box-shadow: 0 1.3rem 3rem rgba(16, 39, 68, 0.16);
+      }
+
+      .profile-sheet {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .profile-sheet-head {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+      }
+
+      .profile-sheet-copy {
+        display: grid;
+        gap: 0.15rem;
       }
 
       .profile-card {
@@ -1259,7 +1346,8 @@ ${renderBaseStyleBlock()}
 
         .data-table-controls,
         .topbar-actions {
-          justify-content: stretch;
+          justify-content: flex-end;
+          flex-wrap: wrap;
         }
 
         .data-table-count {
@@ -1288,7 +1376,7 @@ ${renderBaseStyleBlock()}
         </footer>
       </aside>
       <div class="admin-main">
-        <header class="topbar">${props.topbarHtml}</header>
+        ${renderAdminTopbar(props.topbar)}
         <section class="page-header">
           <h1>${escapeHtml(props.heading)}</h1>
           ${
@@ -1383,6 +1471,52 @@ ${renderBaseStyleBlock()}
           sidebarSearch.addEventListener("input", updateSidebar);
           updateSidebar();
         }
+
+        document.querySelectorAll("[data-topbar-disclosure]").forEach((root) => {
+          const toggle = root.querySelector("[data-topbar-toggle]");
+          const panel = root.querySelector("[data-topbar-panel]");
+
+          if (!(toggle instanceof HTMLButtonElement) || !(panel instanceof HTMLElement)) {
+            return;
+          }
+
+          const closePanel = () => {
+            panel.hidden = true;
+            toggle.setAttribute("aria-expanded", "false");
+          };
+
+          const openPanel = () => {
+            panel.hidden = false;
+            toggle.setAttribute("aria-expanded", "true");
+          };
+
+          toggle.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (panel.hidden) {
+              openPanel();
+            } else {
+              closePanel();
+            }
+          });
+
+          root.addEventListener("click", (event) => {
+            event.stopPropagation();
+          });
+
+          document.addEventListener("click", (event) => {
+            if (!(event.target instanceof Node) || !root.contains(event.target)) {
+              closePanel();
+            }
+          });
+
+          document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+              closePanel();
+            }
+          });
+        });
 
         const tabRoots = Array.from(document.querySelectorAll("[data-tabs]"));
 

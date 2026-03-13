@@ -1082,6 +1082,21 @@ function renderFocusLink(
   }`;
 }
 
+function renderUserIconSvg(): string {
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"></path>
+    <path d="M4.5 20a7.5 7.5 0 0 1 15 0"></path>
+  </svg>`;
+}
+
+function renderSignOutIconSvg(): string {
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 17l5-5-5-5"></path>
+    <path d="M15 12H3"></path>
+    <path d="M12 3h6a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3h-6"></path>
+  </svg>`;
+}
+
 function renderLoginPage(locale: WebLocale, notice?: PanelNotice): string {
   const copy = copyByLocale[locale];
 
@@ -2330,31 +2345,67 @@ function renderDashboard(
     </div>
   </section>`;
 
-  const topbarHtml = `<div class="profile-card">
-    <span class="profile-avatar">${escapeHtml(getInitials(data.currentUser.displayName))}</span>
-    <div class="profile-copy">
-      <strong class="profile-name">${escapeHtml(data.currentUser.displayName)}</strong>
-      <span class="profile-meta">${escapeHtml(data.currentUser.email)}</span>
+  const topbarUserPanelHtml = `<div class="profile-sheet">
+    <div class="profile-sheet-head">
+      <span class="profile-avatar">${escapeHtml(getInitials(data.currentUser.displayName))}</span>
+      <div class="profile-sheet-copy">
+        <strong class="profile-name">${escapeHtml(data.currentUser.displayName)}</strong>
+        <span class="profile-meta">${escapeHtml(data.currentUser.email)}</span>
+      </div>
     </div>
-  </div>
-  <div class="topbar-actions">
-    <form method="post" action="/preferences/locale" class="inline-form">
-      <input type="hidden" name="returnTo" value="${escapeHtml(currentPath)}" />
-      <label>
-        <select
-          name="locale"
-          aria-label="${escapeHtml(copy.languageLabel)}"
-          onchange="const returnTo=this.form.querySelector('[name=returnTo]'); if (returnTo instanceof HTMLInputElement) { returnTo.value = window.location.pathname + window.location.search + window.location.hash; } this.form.submit();"
-        >
-          <option value="es"${locale === "es" ? " selected" : ""}>ES</option>
-          <option value="en"${locale === "en" ? " selected" : ""}>EN</option>
-        </select>
-      </label>
-    </form>
-    <form method="post" action="/auth/logout" class="inline-form">
-      <button class="danger" type="submit">${escapeHtml(copy.signOutLabel)}</button>
-    </form>
+    ${renderDetailGrid([
+      { label: copy.emailLabel, value: escapeHtml(data.currentUser.email) },
+      {
+        label: copy.globalRoles,
+        value: escapeHtml(formatList(data.currentUser.globalRoles, copy.none))
+      },
+      {
+        label: copy.tenantMemberships,
+        value: escapeHtml(tenantMemberships)
+      }
+    ])}
   </div>`;
+
+  const topbarActionsHtml = `<form method="post" action="/preferences/locale" class="inline-form">
+    <input type="hidden" name="returnTo" value="${escapeHtml(currentPath)}" />
+    <label>
+      <select
+        name="locale"
+        aria-label="${escapeHtml(copy.languageLabel)}"
+        onchange="const returnTo=this.form.querySelector('[name=returnTo]'); if (returnTo instanceof HTMLInputElement) { returnTo.value = window.location.pathname + window.location.search + window.location.hash; } this.form.submit();"
+      >
+        <option value="es"${locale === "es" ? " selected" : ""}>ES</option>
+        <option value="en"${locale === "en" ? " selected" : ""}>EN</option>
+      </select>
+    </label>
+  </form>
+  <div class="topbar-disclosure" data-topbar-disclosure>
+    <button
+      type="button"
+      class="secondary icon-button"
+      data-topbar-toggle
+      aria-label="${escapeHtml(data.currentUser.displayName)}"
+      aria-expanded="false"
+      title="${escapeHtml(data.currentUser.displayName)}"
+    >
+      ${renderUserIconSvg()}
+      <span class="sr-only">${escapeHtml(data.currentUser.displayName)}</span>
+    </button>
+    <aside class="topbar-panel" data-topbar-panel hidden>
+      ${topbarUserPanelHtml}
+    </aside>
+  </div>
+  <form method="post" action="/auth/logout" class="inline-form">
+    <button
+      class="danger icon-button"
+      type="submit"
+      aria-label="${escapeHtml(copy.signOutLabel)}"
+      title="${escapeHtml(copy.signOutLabel)}"
+    >
+      ${renderSignOutIconSvg()}
+      <span class="sr-only">${escapeHtml(copy.signOutLabel)}</span>
+    </button>
+  </form>`;
 
   const sidebarGroups: AdminNavGroup[] = [
     {
@@ -2602,7 +2653,9 @@ function renderDashboard(
     eyebrow: copy.eyebrow,
     subheading: getDashboardSubheading(copy, view),
     notice,
-    topbarHtml,
+    topbar: {
+      actionsHtml: topbarActionsHtml
+    },
     versionLabel: copy.versionLabel,
     versionValue: config.version,
     sidebarSearchPlaceholder: copy.sidebarSearchPlaceholder,

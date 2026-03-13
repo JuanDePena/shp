@@ -1,6 +1,6 @@
 {
   "name": "@simplehost/panel-ui",
-  "version": "2603.13.11",
+  "version": "2603.13.12",
   "private": true,
   "type": "module",
   "main": "dist/index.js",

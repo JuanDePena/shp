@@ -139,6 +139,7 @@ function renderBaseStyleBlock(): string {
 
       html {
         min-height: 100%;
+        font-size: 90%;
       }
 
       body {

@@ -54,7 +54,7 @@ Release version format:
 - `YYMM.DD.NN`
 - first stamped release: `2603.12.00`
 
-`./scripts/configure-public-web.sh` defaults the certificate contact to `webmaster@<domain>`, for example `webmaster@pyrosa.com.do` when the host is `vps-prd.pyrosa.com.do`.
+`./scripts/configure-public-web.sh` defaults the certificate contact to `webmaster@<domain>`, for example `webmaster@pyrosa.com.do` when the host is `vps-prd.pyrosa.com.do`. It serves `SHP_DOCUMENT_ROOT` on `443`, proxies `SHP web` on `https://<host>:3200`, and proxies the local code-server on `https://<host>:8080`.
 
 Packaged runtime artifacts:
 

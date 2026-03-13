@@ -38,19 +38,23 @@ export function renderPanelShell(props: PanelShellProps): string {
     <style>
       :root {
         color-scheme: light;
-        --paper: #f8f2e8;
-        --paper-strong: #efe2cf;
-        --ink: #1f1a14;
-        --muted: #6d5d4b;
-        --line: rgba(31, 26, 20, 0.12);
-        --accent: #996438;
-        --accent-soft: rgba(153, 100, 56, 0.12);
-        --success: #0d6b48;
-        --success-soft: rgba(13, 107, 72, 0.12);
-        --danger: #9d2e2e;
-        --danger-soft: rgba(157, 46, 46, 0.12);
+        --paper: #eef4fb;
+        --paper-strong: #d8e5f4;
+        --ink: #0d2038;
+        --muted: #4c6481;
+        --line: rgba(13, 32, 56, 0.14);
+        --accent: #f28c28;
+        --accent-soft: rgba(242, 140, 40, 0.16);
+        --attention: #b7f34d;
+        --attention-soft: rgba(183, 243, 77, 0.2);
+        --success: #7ecf29;
+        --success-soft: rgba(126, 207, 41, 0.18);
+        --danger: #d4442f;
+        --danger-soft: rgba(212, 68, 47, 0.14);
+        --navy-strong: #102744;
+        --navy-soft: #18365b;
         font-family: "IBM Plex Sans", "Iosevka Etoile", sans-serif;
-        background: #eadfcb;
+        background: #dce8f5;
         color: var(--ink);
       }
 
@@ -61,9 +65,10 @@ export function renderPanelShell(props: PanelShellProps): string {
       body {
         margin: 0;
         background:
-          radial-gradient(circle at top left, rgba(153, 100, 56, 0.22), transparent 24rem),
-          radial-gradient(circle at bottom right, rgba(89, 59, 34, 0.16), transparent 28rem),
-          linear-gradient(145deg, #f4ecdf 0%, #e8dbc3 100%);
+          radial-gradient(circle at top left, rgba(16, 39, 68, 0.18), transparent 24rem),
+          radial-gradient(circle at top right, rgba(183, 243, 77, 0.18), transparent 20rem),
+          radial-gradient(circle at bottom right, rgba(242, 140, 40, 0.16), transparent 28rem),
+          linear-gradient(145deg, #eff5fb 0%, #d9e6f4 100%);
       }
 
       a {
@@ -90,13 +95,15 @@ export function renderPanelShell(props: PanelShellProps): string {
         padding: 1.5rem;
         border: 1px solid var(--line);
         border-radius: 1.5rem;
-        background: rgba(255, 251, 245, 0.9);
-        box-shadow: 0 1.5rem 4rem rgba(73, 45, 19, 0.12);
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(236, 244, 251, 0.96)),
+          linear-gradient(90deg, rgba(16, 39, 68, 0.06), rgba(183, 243, 77, 0.06));
+        box-shadow: 0 1.5rem 4rem rgba(16, 39, 68, 0.14);
       }
 
       .hero-eyebrow {
         margin: 0;
-        color: var(--muted);
+        color: var(--navy-soft);
         text-transform: uppercase;
         letter-spacing: 0.16em;
         font-size: 0.74rem;
@@ -121,24 +128,28 @@ export function renderPanelShell(props: PanelShellProps): string {
       }
 
       .notice-success {
-        background: var(--success-soft);
-        border-color: rgba(13, 107, 72, 0.24);
+        background: var(--attention-soft);
+        border-color: rgba(126, 207, 41, 0.32);
       }
 
       .notice-error {
         background: var(--danger-soft);
-        border-color: rgba(157, 46, 46, 0.24);
+        border-color: rgba(212, 68, 47, 0.28);
       }
 
       .notice-info {
         background: var(--accent-soft);
-        border-color: rgba(153, 100, 56, 0.24);
+        border-color: rgba(242, 140, 40, 0.28);
       }
 
       .grid {
         display: grid;
         gap: 1rem;
         margin-top: 1rem;
+      }
+
+      .login-shell {
+        padding-top: 1.25rem;
       }
 
       .grid-two {
@@ -153,7 +164,34 @@ export function renderPanelShell(props: PanelShellProps): string {
         padding: 1.1rem;
         border: 1px solid var(--line);
         border-radius: 1.2rem;
-        background: rgba(255, 252, 247, 0.92);
+        background: rgba(250, 253, 255, 0.92);
+      }
+
+      .login-card {
+        width: min(100%, 40rem);
+        margin: 0 auto;
+        padding: 1.55rem 1.45rem 1.35rem;
+        border-radius: 1.45rem;
+        box-shadow: 0 1.25rem 2.8rem rgba(16, 39, 68, 0.14);
+      }
+
+      .login-card h2 {
+        margin-bottom: 0.8rem;
+        font-size: 1.65rem;
+      }
+
+      .login-card .stack {
+        gap: 1rem;
+      }
+
+      .login-card input {
+        min-height: 3.35rem;
+        padding: 0.9rem 1rem;
+      }
+
+      .login-card button {
+        min-height: 3.4rem;
+        font-size: 1.05rem;
       }
 
       .panel h2,
@@ -175,7 +213,7 @@ export function renderPanelShell(props: PanelShellProps): string {
         padding: 0.9rem 1rem;
         border-radius: 1rem;
         background: var(--paper);
-        border: 1px solid rgba(31, 26, 20, 0.08);
+        border: 1px solid rgba(13, 32, 56, 0.08);
       }
 
       .stat strong {
@@ -220,9 +258,17 @@ export function renderPanelShell(props: PanelShellProps): string {
         width: 100%;
         padding: 0.7rem 0.8rem;
         border-radius: 0.8rem;
-        border: 1px solid rgba(31, 26, 20, 0.16);
-        background: rgba(255, 255, 255, 0.85);
+        border: 1px solid rgba(16, 39, 68, 0.18);
+        background: rgba(255, 255, 255, 0.9);
         color: var(--ink);
+      }
+
+      input:focus,
+      textarea:focus,
+      select:focus {
+        outline: 2px solid rgba(183, 243, 77, 0.42);
+        border-color: rgba(16, 39, 68, 0.42);
+        box-shadow: 0 0 0 0.25rem rgba(183, 243, 77, 0.16);
       }
 
       textarea {
@@ -234,13 +280,15 @@ export function renderPanelShell(props: PanelShellProps): string {
         border: none;
         border-radius: 999px;
         padding: 0.75rem 1rem;
-        background: var(--accent);
-        color: #fff8ef;
+        background: linear-gradient(135deg, var(--navy-soft), var(--navy-strong));
+        color: #f5fbff;
         cursor: pointer;
+        box-shadow: 0 0.8rem 1.8rem rgba(16, 39, 68, 0.18);
       }
 
       button.secondary {
-        background: #403225;
+        background: linear-gradient(135deg, #f5a13a, var(--accent));
+        color: #1b1309;
       }
 
       button.danger {
@@ -283,8 +331,8 @@ export function renderPanelShell(props: PanelShellProps): string {
       }
 
       .pill-success {
-        background: var(--success-soft);
-        color: var(--success);
+        background: var(--attention-soft);
+        color: #557d16;
       }
 
       .pill-danger {

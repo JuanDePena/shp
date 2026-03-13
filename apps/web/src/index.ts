@@ -336,8 +336,8 @@ function renderLoginPage(notice?: PanelNotice): string {
     heading: "SHP Login",
     eyebrow: "SimpleHostPanel web",
     notice,
-    body: `<section class="grid">
-      <article class="panel" style="max-width: 32rem; margin: 0 auto;">
+    body: `<section class="grid login-shell">
+      <article class="panel login-card">
         <h2>Operator access</h2>
         <form method="post" action="/auth/login" class="stack">
           <label>Email

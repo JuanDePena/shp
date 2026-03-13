@@ -1,6 +1,6 @@
 {
   "name": "@simplehost/panel-api",
-  "version": "2603.13.00",
+  "version": "2603.13.02",
   "private": true,
   "type": "module",
   "main": "dist/index.js",

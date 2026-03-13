@@ -919,7 +919,7 @@ ${renderBaseStyleBlock()}
 
       .topbar {
         position: relative;
-        padding: 0.28rem 0.6rem 0.06rem;
+        padding: 0.56rem 0.6rem;
         border: 1px solid var(--line);
         border-radius: 1.05rem;
         background: rgba(255, 255, 255, 0.78);

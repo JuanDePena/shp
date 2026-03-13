@@ -33,6 +33,12 @@ install -m 0644 "${repo_root}/packaging/systemd/spanel-worker.service" /etc/syst
 install -m 0644 "${repo_root}/packaging/env/spanel-api.env.example" /etc/spanel/api.env.example
 install -m 0644 "${repo_root}/packaging/env/spanel-web.env.example" /etc/spanel/web.env.example
 install -m 0644 "${repo_root}/packaging/env/spanel-worker.env.example" /etc/spanel/worker.env.example
+bash "${release_dir}/scripts/normalize-api-env.sh" /etc/spanel/api.env.example
+
+if [[ -f /etc/spanel/api.env ]]; then
+  bash "${release_dir}/scripts/normalize-api-env.sh" /etc/spanel/api.env
+fi
+
 systemctl daemon-reload
 
 echo "Installed SHP release ${version} into ${release_dir}"

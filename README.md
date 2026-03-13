@@ -56,6 +56,8 @@ Release version format:
 
 `./scripts/configure-public-web.sh` defaults the certificate contact to `webmaster@<domain>`, for example `webmaster@pyrosa.com.do` when the host is `vps-prd.pyrosa.com.do`. It serves `SHP_DOCUMENT_ROOT` on `443`, proxies `SHP web` on `https://<host>:3200`, and proxies the local code-server on `https://<host>:8080`.
 
+When `SHP_BOOTSTRAP_ADMIN_EMAIL` is left as `admin@example.com`, install/deploy will derive `webmaster@<domain>` from `SHP_DEFAULT_DOMAIN` or, if present, from `SHP_PUBLIC_HOSTNAME`.
+
 Packaged runtime artifacts:
 
 - `packaging/systemd/spanel-api.service`

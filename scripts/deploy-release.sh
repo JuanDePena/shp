@@ -33,10 +33,20 @@ ensure_env_version() {
   fi
 }
 
+normalize_api_env() {
+  local target_path="$1"
+
+  if [[ -f "${target_path}" ]]; then
+    bash "${release_dir}/scripts/normalize-api-env.sh" "${target_path}"
+  fi
+}
+
 activate_local() {
   ensure_env_version /etc/spanel/api.env "${release_dir}/packaging/env/spanel-api.env.example"
   ensure_env_version /etc/spanel/web.env "${release_dir}/packaging/env/spanel-web.env.example"
   ensure_env_version /etc/spanel/worker.env "${release_dir}/packaging/env/spanel-worker.env.example"
+  normalize_api_env /etc/spanel/api.env.example
+  normalize_api_env /etc/spanel/api.env
   systemctl daemon-reload
 
   if [[ "${mode}" == "passive" ]]; then
@@ -72,6 +82,8 @@ activate_remote() {
      if grep -q '^SHP_VERSION=' /etc/spanel/api.env; then sed -i 's/^SHP_VERSION=.*/SHP_VERSION=${version}/' /etc/spanel/api.env; else printf '\nSHP_VERSION=${version}\n' >> /etc/spanel/api.env; fi && \
      if grep -q '^SHP_VERSION=' /etc/spanel/web.env; then sed -i 's/^SHP_VERSION=.*/SHP_VERSION=${version}/' /etc/spanel/web.env; else printf '\nSHP_VERSION=${version}\n' >> /etc/spanel/web.env; fi && \
      if grep -q '^SHP_VERSION=' /etc/spanel/worker.env; then sed -i 's/^SHP_VERSION=.*/SHP_VERSION=${version}/' /etc/spanel/worker.env; else printf '\nSHP_VERSION=${version}\n' >> /etc/spanel/worker.env; fi && \
+     bash '${remote_release_dir}/scripts/normalize-api-env.sh' /etc/spanel/api.env.example && \
+     bash '${remote_release_dir}/scripts/normalize-api-env.sh' /etc/spanel/api.env && \
      systemctl daemon-reload"
 
   if [[ "${mode}" == "passive" ]]; then

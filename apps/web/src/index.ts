@@ -28,11 +28,24 @@ import {
   type OperationsOverview,
   type ResourceDriftSummary
 } from "@simplehost/panel-contracts";
-import { escapeHtml, renderPanelShell, type PanelNotice } from "@simplehost/panel-ui";
+import {
+  escapeHtml,
+  renderAdminShell,
+  renderDataTable,
+  renderPanelShell,
+  renderTabs,
+  type AdminNavGroup,
+  type DataTableRow,
+  type PanelNotice,
+  type TabItem
+} from "@simplehost/panel-ui";
 
 const config = createPanelRuntimeConfig();
 const startedAt = Date.now();
 const sessionCookieName = "shp_session";
+const localeCookieName = "shp_lang";
+
+type WebLocale = "en" | "es";
 
 interface DashboardData {
   currentUser: AuthenticatedUserSummary;
@@ -44,6 +57,328 @@ interface DashboardData {
   jobHistory: JobHistoryEntry[];
   backups: BackupsOverview;
 }
+
+interface WebCopy {
+  appName: string;
+  eyebrow: string;
+  loginTitle: string;
+  loginHeading: string;
+  loginAccess: string;
+  emailLabel: string;
+  passwordLabel: string;
+  signInLabel: string;
+  signOutLabel: string;
+  languageLabel: string;
+  versionLabel: string;
+  sidebarSearchPlaceholder: string;
+  navControlPlane: string;
+  navOverview: string;
+  navContext: string;
+  navOperations: string;
+  navNodeHealth: string;
+  navDrift: string;
+  navJobs: string;
+  navBackups: string;
+  navResources: string;
+  navDesiredState: string;
+  navCreate: string;
+  navTenants: string;
+  navNodes: string;
+  navZones: string;
+  navApps: string;
+  navDatabases: string;
+  navBackupPolicies: string;
+  dashboardHeading: string;
+  dashboardSubheading: string;
+  actionsRunReconciliation: string;
+  actionsImportInventory: string;
+  actionsDownloadYaml: string;
+  overviewTitle: string;
+  managedNodes: string;
+  pendingJobs: string;
+  failedJobs: string;
+  resourcesWithDrift: string;
+  backupPolicies: string;
+  generatedAt: string;
+  usersAndScope: string;
+  inventoryImport: string;
+  latestReconciliation: string;
+  globalRoles: string;
+  tenantMemberships: string;
+  none: string;
+  latestImport: string;
+  never: string;
+  latestImportCounts: string;
+  noReconciliationRun: string;
+  reconciliationVersion: string;
+  reconciliationSummary: string;
+  nodeHealthTitle: string;
+  nodeHealthDescription: string;
+  resourceDriftTitle: string;
+  resourceDriftDescription: string;
+  jobHistoryTitle: string;
+  jobHistoryDescription: string;
+  backupsTitle: string;
+  backupsDescription: string;
+  desiredStateTitle: string;
+  desiredStateDescription: string;
+  dataFilterPlaceholder: string;
+  rowsPerPage: string;
+  showing: string;
+  of: string;
+  records: string;
+  nodeColNode: string;
+  nodeColHostname: string;
+  nodeColVersion: string;
+  nodeColPending: string;
+  nodeColLatestStatus: string;
+  nodeColLatestSummary: string;
+  nodeColLastSeen: string;
+  driftColKind: string;
+  driftColResource: string;
+  driftColNode: string;
+  driftColDrift: string;
+  driftColLatestStatus: string;
+  driftColSummary: string;
+  jobColJob: string;
+  jobColKind: string;
+  jobColNode: string;
+  jobColStatus: string;
+  jobColReason: string;
+  jobColSummary: string;
+  jobColCreated: string;
+  backupColPolicy: string;
+  backupColNode: string;
+  backupColStatus: string;
+  backupColSummary: string;
+  backupColStarted: string;
+  noNodes: string;
+  noDrift: string;
+  noJobs: string;
+  noBackups: string;
+  tabCreate: string;
+  tabTenants: string;
+  tabNodes: string;
+  tabZones: string;
+  tabApps: string;
+  tabDatabases: string;
+  tabBackupPolicies: string;
+}
+
+const copyByLocale: Record<WebLocale, WebCopy> = {
+  en: {
+    appName: "SimpleHostPanel",
+    eyebrow: "SimpleHostPanel admin",
+    loginTitle: "SimpleHostPanel Login",
+    loginHeading: "SHP Login",
+    loginAccess: "Operator access",
+    emailLabel: "Email",
+    passwordLabel: "Password",
+    signInLabel: "Sign in",
+    signOutLabel: "Sign out",
+    languageLabel: "Language",
+    versionLabel: "Version",
+    sidebarSearchPlaceholder: "Search navigation",
+    navControlPlane: "Control plane",
+    navOverview: "Overview",
+    navContext: "Context",
+    navOperations: "Operations",
+    navNodeHealth: "Node health",
+    navDrift: "Resource drift",
+    navJobs: "Job history",
+    navBackups: "Backups",
+    navResources: "Desired state",
+    navDesiredState: "Desired state",
+    navCreate: "Create",
+    navTenants: "Tenants",
+    navNodes: "Nodes",
+    navZones: "Zones",
+    navApps: "Apps",
+    navDatabases: "Databases",
+    navBackupPolicies: "Backup policies",
+    dashboardHeading: "Control plane",
+    dashboardSubheading: "Operate nodes, jobs, backups, and desired state from a single control surface.",
+    actionsRunReconciliation: "Run reconciliation",
+    actionsImportInventory: "Import YAML inventory",
+    actionsDownloadYaml: "Download desired-state YAML",
+    overviewTitle: "Operations overview",
+    managedNodes: "Managed nodes",
+    pendingJobs: "Pending jobs",
+    failedJobs: "Failed jobs",
+    resourcesWithDrift: "Resources with drift",
+    backupPolicies: "Backup policies",
+    generatedAt: "Generated",
+    usersAndScope: "Users and scope",
+    inventoryImport: "Inventory import",
+    latestReconciliation: "Latest reconciliation",
+    globalRoles: "Global roles",
+    tenantMemberships: "Tenant memberships",
+    none: "none",
+    latestImport: "Latest import",
+    never: "never",
+    latestImportCounts: "Nodes {nodes}, zones {zones}, apps {apps}, databases {databases}",
+    noReconciliationRun: "No reconciliation run recorded yet.",
+    reconciliationVersion: "Version {version}",
+    reconciliationSummary: "Generated {generated}, skipped {skipped}, missing secrets {missing}",
+    nodeHealthTitle: "Node health",
+    nodeHealthDescription: "Health, version, pending jobs and latest result by node.",
+    resourceDriftTitle: "Resource drift",
+    resourceDriftDescription: "Current reconciliation view across DNS, proxy and databases.",
+    jobHistoryTitle: "Job history",
+    jobHistoryDescription: "Recent control-plane dispatches and node execution status.",
+    backupsTitle: "Backups",
+    backupsDescription: "Latest runs and current backup policy coverage.",
+    desiredStateTitle: "Desired state",
+    desiredStateDescription: "PostgreSQL is the source of truth. Use tabs to create and manage platform resources.",
+    dataFilterPlaceholder: "Filter records",
+    rowsPerPage: "Rows per page",
+    showing: "Showing",
+    of: "of",
+    records: "records",
+    nodeColNode: "Node",
+    nodeColHostname: "Hostname",
+    nodeColVersion: "Version",
+    nodeColPending: "Pending",
+    nodeColLatestStatus: "Latest status",
+    nodeColLatestSummary: "Latest summary",
+    nodeColLastSeen: "Last seen",
+    driftColKind: "Kind",
+    driftColResource: "Resource",
+    driftColNode: "Node",
+    driftColDrift: "Drift",
+    driftColLatestStatus: "Latest status",
+    driftColSummary: "Summary",
+    jobColJob: "Job",
+    jobColKind: "Kind",
+    jobColNode: "Node",
+    jobColStatus: "Status",
+    jobColReason: "Reason",
+    jobColSummary: "Summary",
+    jobColCreated: "Created",
+    backupColPolicy: "Policy",
+    backupColNode: "Node",
+    backupColStatus: "Status",
+    backupColSummary: "Summary",
+    backupColStarted: "Started",
+    noNodes: "No nodes.",
+    noDrift: "No drift records.",
+    noJobs: "No jobs.",
+    noBackups: "No backup runs.",
+    tabCreate: "Create",
+    tabTenants: "Tenants",
+    tabNodes: "Nodes",
+    tabZones: "DNS zones",
+    tabApps: "Apps",
+    tabDatabases: "Databases",
+    tabBackupPolicies: "Backup policies"
+  },
+  es: {
+    appName: "SimpleHostPanel",
+    eyebrow: "Administración SHP",
+    loginTitle: "Acceso a SimpleHostPanel",
+    loginHeading: "SHP Login",
+    loginAccess: "Acceso de operador",
+    emailLabel: "Correo",
+    passwordLabel: "Contraseña",
+    signInLabel: "Entrar",
+    signOutLabel: "Salir",
+    languageLabel: "Idioma",
+    versionLabel: "Versión",
+    sidebarSearchPlaceholder: "Buscar opción",
+    navControlPlane: "Plano de control",
+    navOverview: "Resumen",
+    navContext: "Contexto",
+    navOperations: "Operaciones",
+    navNodeHealth: "Salud de nodos",
+    navDrift: "Drift de recursos",
+    navJobs: "Historial de jobs",
+    navBackups: "Backups",
+    navResources: "Estado deseado",
+    navDesiredState: "Estado deseado",
+    navCreate: "Crear",
+    navTenants: "Tenants",
+    navNodes: "Nodos",
+    navZones: "Zonas",
+    navApps: "Apps",
+    navDatabases: "Bases de datos",
+    navBackupPolicies: "Políticas de backup",
+    dashboardHeading: "Plano de control",
+    dashboardSubheading: "Opera nodos, jobs, backups y estado deseado desde una sola consola.",
+    actionsRunReconciliation: "Ejecutar reconciliación",
+    actionsImportInventory: "Importar inventario YAML",
+    actionsDownloadYaml: "Descargar YAML del estado deseado",
+    overviewTitle: "Resumen operativo",
+    managedNodes: "Nodos gestionados",
+    pendingJobs: "Jobs pendientes",
+    failedJobs: "Jobs fallidos",
+    resourcesWithDrift: "Recursos con drift",
+    backupPolicies: "Políticas de backup",
+    generatedAt: "Generado",
+    usersAndScope: "Usuarios y alcance",
+    inventoryImport: "Importación de inventario",
+    latestReconciliation: "Última reconciliación",
+    globalRoles: "Roles globales",
+    tenantMemberships: "Membresías por tenant",
+    none: "ninguna",
+    latestImport: "Última importación",
+    never: "nunca",
+    latestImportCounts: "Nodos {nodes}, zonas {zones}, apps {apps}, bases de datos {databases}",
+    noReconciliationRun: "Todavía no hay una reconciliación registrada.",
+    reconciliationVersion: "Versión {version}",
+    reconciliationSummary: "Generados {generated}, omitidos {skipped}, secretos faltantes {missing}",
+    nodeHealthTitle: "Salud de nodos",
+    nodeHealthDescription: "Estado, versión, jobs pendientes y último resultado por nodo.",
+    resourceDriftTitle: "Drift de recursos",
+    resourceDriftDescription: "Vista actual de reconciliación sobre DNS, proxy y bases de datos.",
+    jobHistoryTitle: "Historial de jobs",
+    jobHistoryDescription: "Despachos recientes del control plane y estado de ejecución en nodos.",
+    backupsTitle: "Backups",
+    backupsDescription: "Últimas ejecuciones y cobertura actual de políticas.",
+    desiredStateTitle: "Estado deseado",
+    desiredStateDescription: "PostgreSQL es la fuente de verdad. Usa tabs para crear y gestionar recursos de plataforma.",
+    dataFilterPlaceholder: "Filtrar registros",
+    rowsPerPage: "Filas por página",
+    showing: "Mostrando",
+    of: "de",
+    records: "registros",
+    nodeColNode: "Nodo",
+    nodeColHostname: "Hostname",
+    nodeColVersion: "Versión",
+    nodeColPending: "Pendientes",
+    nodeColLatestStatus: "Último estado",
+    nodeColLatestSummary: "Último resumen",
+    nodeColLastSeen: "Última señal",
+    driftColKind: "Tipo",
+    driftColResource: "Recurso",
+    driftColNode: "Nodo",
+    driftColDrift: "Drift",
+    driftColLatestStatus: "Último estado",
+    driftColSummary: "Resumen",
+    jobColJob: "Job",
+    jobColKind: "Tipo",
+    jobColNode: "Nodo",
+    jobColStatus: "Estado",
+    jobColReason: "Motivo",
+    jobColSummary: "Resumen",
+    jobColCreated: "Creado",
+    backupColPolicy: "Política",
+    backupColNode: "Nodo",
+    backupColStatus: "Estado",
+    backupColSummary: "Resumen",
+    backupColStarted: "Inicio",
+    noNodes: "No hay nodos.",
+    noDrift: "No hay registros de drift.",
+    noJobs: "No hay jobs.",
+    noBackups: "No hay ejecuciones de backup.",
+    tabCreate: "Crear",
+    tabTenants: "Tenants",
+    tabNodes: "Nodos",
+    tabZones: "Zonas DNS",
+    tabApps: "Apps",
+    tabDatabases: "Bases de datos",
+    tabBackupPolicies: "Políticas de backup"
+  }
+};
 
 class WebApiError extends Error {
   constructor(
@@ -82,7 +417,7 @@ function writeHtml(
 function redirect(
   response: ServerResponse,
   location: string,
-  cookie?: string
+  cookie?: string | string[]
 ): void {
   response.writeHead(303, {
     location,
@@ -130,6 +465,26 @@ function readSessionToken(request: IncomingMessage): string | null {
   return parseCookies(request).get(sessionCookieName) ?? null;
 }
 
+function normalizeLocale(value: string | null | undefined): WebLocale {
+  return value === "en" ? "en" : "es";
+}
+
+function readLocale(request: IncomingMessage): WebLocale {
+  const cookieLocale = parseCookies(request).get(localeCookieName);
+
+  if (cookieLocale === "en" || cookieLocale === "es") {
+    return cookieLocale;
+  }
+
+  const acceptLanguage = request.headers["accept-language"];
+
+  if (typeof acceptLanguage === "string" && !acceptLanguage.toLowerCase().includes("es")) {
+    return "en";
+  }
+
+  return "es";
+}
+
 function serializeSessionCookie(token: string, expiresAt: string): string {
   const maxAgeSeconds = Math.max(
     0,
@@ -141,6 +496,18 @@ function serializeSessionCookie(token: string, expiresAt: string): string {
 
 function clearSessionCookie(): string {
   return `${sessionCookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+}
+
+function serializeLocaleCookie(locale: WebLocale): string {
+  return `${localeCookieName}=${encodeURIComponent(locale)}; Path=/; SameSite=Lax; Max-Age=31536000`;
+}
+
+function sanitizeReturnTo(value: string | null | undefined): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "/";
+  }
+
+  return value;
 }
 
 async function apiRequest<T>(
@@ -189,20 +556,33 @@ async function apiRequest<T>(
   return (responseText ? JSON.parse(responseText) : null) as T;
 }
 
-function formatDate(value: string | undefined): string {
+function formatDate(value: string | undefined, locale: WebLocale): string {
   if (!value) {
     return "-";
   }
 
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat(locale === "es" ? "es-DO" : "en-GB", {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone: "UTC"
   }).format(new Date(value));
 }
 
-function formatList(values: string[]): string {
-  return values.length > 0 ? values.join(", ") : "-";
+function formatList(values: string[], emptyValue = "-"): string {
+  return values.length > 0 ? values.join(", ") : emptyValue;
+}
+
+function interpolateCopy(
+  template: string,
+  values: Record<string, string | number>
+): string {
+  let next = template;
+
+  for (const [key, value] of Object.entries(values)) {
+    next = next.replaceAll(`{${key}}`, String(value));
+  }
+
+  return next;
 }
 
 function parseCommaSeparated(value: string): string[] {
@@ -316,44 +696,50 @@ function renderPill(
   return `<span class="${className}">${escapeHtml(value)}</span>`;
 }
 
-function renderStats(overview: OperationsOverview): string {
-  return `<section class="panel">
-    <h2>Operations Overview</h2>
-    <div class="stats">
-      <article class="stat"><strong>${overview.nodeCount}</strong><span>Managed nodes</span></article>
-      <article class="stat"><strong>${overview.pendingJobCount}</strong><span>Pending jobs</span></article>
-      <article class="stat"><strong>${overview.failedJobCount}</strong><span>Failed jobs</span></article>
-      <article class="stat"><strong>${overview.driftedResourceCount}</strong><span>Resources with drift</span></article>
-      <article class="stat"><strong>${overview.backupPolicyCount}</strong><span>Backup policies</span></article>
-    </div>
-    <p class="muted">Generated ${escapeHtml(formatDate(overview.generatedAt))}</p>
-  </section>`;
+function renderStats(
+  overview: OperationsOverview,
+  copy: WebCopy,
+  locale: WebLocale
+): string {
+  return `<div class="stats">
+    <article class="stat"><strong>${overview.nodeCount}</strong><span>${escapeHtml(copy.managedNodes)}</span></article>
+    <article class="stat"><strong>${overview.pendingJobCount}</strong><span>${escapeHtml(copy.pendingJobs)}</span></article>
+    <article class="stat"><strong>${overview.failedJobCount}</strong><span>${escapeHtml(copy.failedJobs)}</span></article>
+    <article class="stat"><strong>${overview.driftedResourceCount}</strong><span>${escapeHtml(copy.resourcesWithDrift)}</span></article>
+    <article class="stat"><strong>${overview.backupPolicyCount}</strong><span>${escapeHtml(copy.backupPolicies)}</span></article>
+  </div>
+  <p class="muted">${escapeHtml(copy.generatedAt)} ${escapeHtml(
+    formatDate(overview.generatedAt, locale)
+  )}</p>`;
 }
 
-function renderLoginPage(notice?: PanelNotice): string {
+function renderLoginPage(locale: WebLocale, notice?: PanelNotice): string {
+  const copy = copyByLocale[locale];
+
   return renderPanelShell({
-    title: "SimpleHostPanel Login",
-    heading: "SHP Login",
-    eyebrow: "SimpleHostPanel web",
+    lang: locale,
+    title: copy.loginTitle,
+    heading: copy.loginHeading,
+    eyebrow: copy.eyebrow,
     notice,
     body: `<section class="grid login-shell">
       <article class="panel login-card">
-        <h2>Operator access</h2>
+        <h2>${escapeHtml(copy.loginAccess)}</h2>
         <form method="post" action="/auth/login" class="stack">
-          <label>Email
+          <label>${escapeHtml(copy.emailLabel)}
             <input type="email" name="email" autocomplete="username" required />
           </label>
-          <label>Password
+          <label>${escapeHtml(copy.passwordLabel)}
             <input type="password" name="password" autocomplete="current-password" required />
           </label>
-          <button type="submit">Sign in</button>
+          <button type="submit">${escapeHtml(copy.signInLabel)}</button>
         </form>
       </article>
     </section>`
   });
 }
 
-function renderDesiredStateSection(data: DashboardData): string {
+function renderDesiredStateSection(data: DashboardData, copy: WebCopy): string {
   const tenantRows = data.desiredState.spec.tenants
     .map(
       (tenant) => `<details>
@@ -575,10 +961,7 @@ function renderDesiredStateSection(data: DashboardData): string {
     )
     .join("");
 
-  return `<section class="panel">
-    <h2>Desired State</h2>
-    <p class="muted">Source of truth is PostgreSQL. The forms below mutate the current spec and apply it back through the SHP API.</p>
-    <div class="grid grid-two">
+  const createPanelHtml = `<div class="grid grid-two">
       <article class="panel">
         <h3>Create tenant</h3>
         <form method="post" action="/resources/tenants/upsert" class="stack">
@@ -738,191 +1121,476 @@ function renderDesiredStateSection(data: DashboardData): string {
           <button type="submit">Create backup policy</button>
         </form>
       </article>
+    </div>`;
+
+  const tabs: TabItem[] = [
+    {
+      id: "desired-state-create",
+      label: copy.tabCreate,
+      panelHtml: createPanelHtml
+    },
+    {
+      id: "desired-state-tenants",
+      label: copy.tabTenants,
+      panelHtml: `<article class="panel"><h3>Tenants</h3>${tenantRows || '<p class="empty">No tenants.</p>'}</article>`
+    },
+    {
+      id: "desired-state-nodes",
+      label: copy.tabNodes,
+      panelHtml: `<article class="panel"><h3>Nodes</h3>${nodeRows || '<p class="empty">No nodes.</p>'}</article>`
+    },
+    {
+      id: "desired-state-zones",
+      label: copy.tabZones,
+      panelHtml: `<article class="panel"><h3>Zones</h3>${zoneRows || '<p class="empty">No zones.</p>'}</article>`
+    },
+    {
+      id: "desired-state-apps",
+      label: copy.tabApps,
+      panelHtml: `<article class="panel"><h3>Apps</h3>${appRows || '<p class="empty">No apps.</p>'}</article>`
+    },
+    {
+      id: "desired-state-databases",
+      label: copy.tabDatabases,
+      panelHtml: `<article class="panel"><h3>Databases</h3>${databaseRows || '<p class="empty">No databases.</p>'}</article>`
+    },
+    {
+      id: "desired-state-backups",
+      label: copy.tabBackupPolicies,
+      panelHtml: `<article class="panel"><h3>Backup policies</h3>${backupRows || '<p class="empty">No backup policies.</p>'}</article>`
+    }
+  ];
+
+  return `<section id="section-desired-state" class="panel section-panel">
+    <div class="section-head">
+      <div>
+        <h2>${escapeHtml(copy.desiredStateTitle)}</h2>
+        <p class="muted section-description">${escapeHtml(copy.desiredStateDescription)}</p>
+      </div>
     </div>
-    <div class="grid">
-      <article class="panel"><h3>Tenants</h3>${tenantRows || '<p class="empty">No tenants.</p>'}</article>
-      <article class="panel"><h3>Nodes</h3>${nodeRows || '<p class="empty">No nodes.</p>'}</article>
-      <article class="panel"><h3>Zones</h3>${zoneRows || '<p class="empty">No zones.</p>'}</article>
-      <article class="panel"><h3>Apps</h3>${appRows || '<p class="empty">No apps.</p>'}</article>
-      <article class="panel"><h3>Databases</h3>${databaseRows || '<p class="empty">No databases.</p>'}</article>
-      <article class="panel"><h3>Backup policies</h3>${backupRows || '<p class="empty">No backup policies.</p>'}</article>
-    </div>
+    ${renderTabs({
+      id: "desired-state-tabs",
+      tabs,
+      defaultTabId: "desired-state-create"
+    })}
   </section>`;
 }
 
-function renderDashboard(data: DashboardData, notice?: PanelNotice): string {
+function renderDashboard(
+  data: DashboardData,
+  locale: WebLocale,
+  currentPath: string,
+  notice?: PanelNotice
+): string {
+  const copy = copyByLocale[locale];
   const actionBar = `<div class="toolbar">
     <form method="post" action="/actions/reconcile-run" class="inline-form">
-      <button type="submit">Run reconciliation</button>
+      <button type="submit">${escapeHtml(copy.actionsRunReconciliation)}</button>
     </form>
     <form method="post" action="/actions/inventory-import" class="inline-form">
       <input type="text" name="path" value="${escapeHtml(
         data.inventory.latestImport?.sourcePath ?? config.inventory.importPath
       )}" style="min-width: 22rem;" />
-      <button class="secondary" type="submit">Import YAML inventory</button>
+      <button class="secondary" type="submit">${escapeHtml(copy.actionsImportInventory)}</button>
     </form>
-    <a href="/inventory/export">Download desired-state YAML</a>
+    <a class="button-link secondary" href="/inventory/export">${escapeHtml(copy.actionsDownloadYaml)}</a>
+  </div>`;
+
+  const nodeHealthRows: DataTableRow[] = data.nodeHealth.map((node) => ({
+    cells: [
+      `<span class="mono">${escapeHtml(node.nodeId)}</span>`,
+      escapeHtml(node.hostname),
+      node.currentVersion ? renderPill(node.currentVersion, "muted") : "-",
+      renderPill(String(node.pendingJobCount), node.pendingJobCount > 0 ? "danger" : "success"),
+      node.latestJobStatus
+        ? renderPill(
+            node.latestJobStatus,
+            node.latestJobStatus === "failed"
+              ? "danger"
+              : node.latestJobStatus === "applied"
+                ? "success"
+                : "muted"
+          )
+        : "-",
+      escapeHtml(node.latestJobSummary ?? "-"),
+      escapeHtml(formatDate(node.lastSeenAt, locale))
+    ],
+    searchText: [
+      node.nodeId,
+      node.hostname,
+      node.currentVersion ?? "",
+      node.latestJobStatus ?? "",
+      node.latestJobSummary ?? ""
+    ].join(" ")
+  }));
+
+  const driftRows: DataTableRow[] = data.drift.map((entry) => ({
+    cells: [
+      escapeHtml(entry.resourceKind),
+      `<span class="mono">${escapeHtml(entry.resourceKey)}</span>`,
+      `<span class="mono">${escapeHtml(entry.nodeId)}</span>`,
+      renderPill(
+        entry.driftStatus,
+        entry.driftStatus === "in_sync"
+          ? "success"
+          : entry.driftStatus === "pending"
+            ? "muted"
+            : "danger"
+      ),
+      entry.latestJobStatus
+        ? renderPill(
+            entry.latestJobStatus,
+            entry.latestJobStatus === "applied" ? "success" : "danger"
+          )
+        : "-",
+      escapeHtml(entry.latestSummary ?? "-")
+    ],
+    searchText: [
+      entry.resourceKind,
+      entry.resourceKey,
+      entry.nodeId,
+      entry.driftStatus,
+      entry.latestSummary ?? ""
+    ].join(" ")
+  }));
+
+  const jobRows: DataTableRow[] = data.jobHistory.map((job) => ({
+    cells: [
+      `<span class="mono">${escapeHtml(job.jobId)}</span>`,
+      escapeHtml(job.kind),
+      `<span class="mono">${escapeHtml(job.nodeId)}</span>`,
+      job.status
+        ? renderPill(
+            job.status,
+            job.status === "applied"
+              ? "success"
+              : job.status === "failed"
+                ? "danger"
+                : "muted"
+          )
+        : renderPill("queued", "muted"),
+      escapeHtml(job.dispatchReason ?? "-"),
+      escapeHtml(job.summary ?? "-"),
+      escapeHtml(formatDate(job.createdAt, locale))
+    ],
+    searchText: [
+      job.jobId,
+      job.kind,
+      job.nodeId,
+      job.status ?? "queued",
+      job.dispatchReason ?? "",
+      job.summary ?? ""
+    ].join(" ")
+  }));
+
+  const backupRows: DataTableRow[] = data.backups.latestRuns.map((run) => ({
+    cells: [
+      `<span class="mono">${escapeHtml(run.policySlug)}</span>`,
+      `<span class="mono">${escapeHtml(run.nodeId)}</span>`,
+      renderPill(
+        run.status,
+        run.status === "succeeded"
+          ? "success"
+          : run.status === "failed"
+            ? "danger"
+            : "muted"
+      ),
+      escapeHtml(run.summary),
+      escapeHtml(formatDate(run.startedAt, locale))
+    ],
+    searchText: [run.policySlug, run.nodeId, run.status, run.summary].join(" ")
+  }));
+
+  const tenantMemberships =
+    data.currentUser.tenantMemberships.length > 0
+      ? data.currentUser.tenantMemberships
+          .map((membership) => `${membership.tenantSlug}:${membership.role}`)
+          .join(", ")
+      : copy.none;
+
+  const latestImportSummary = data.inventory.latestImport
+    ? `${formatDate(data.inventory.latestImport.importedAt, locale)} · ${data.inventory.latestImport.sourcePath}`
+    : copy.never;
+
+  const latestReconciliationSummary = data.overview.latestReconciliation
+    ? `<p class="muted">${escapeHtml(
+        interpolateCopy(copy.reconciliationVersion, {
+          version: data.overview.latestReconciliation.desiredStateVersion
+        })
+      )}</p>
+       <p class="muted">${escapeHtml(
+         interpolateCopy(copy.reconciliationSummary, {
+           generated: data.overview.latestReconciliation.generatedJobCount,
+           skipped: data.overview.latestReconciliation.skippedJobCount,
+           missing: data.overview.latestReconciliation.missingCredentialCount
+         })
+       )}</p>`
+    : `<p class="muted">${escapeHtml(copy.noReconciliationRun)}</p>`;
+
+  const contextSection = `<section id="section-context" class="panel section-panel">
+    <div class="section-head">
+      <div>
+        <h2>${escapeHtml(copy.navContext)}</h2>
+      </div>
+    </div>
+    <div class="grid grid-three">
+      <article class="panel">
+        <h3>${escapeHtml(copy.usersAndScope)}</h3>
+        <p><strong>${escapeHtml(data.currentUser.displayName)}</strong> &lt;${escapeHtml(
+          data.currentUser.email
+        )}&gt;</p>
+        <p class="muted">${escapeHtml(copy.globalRoles)}: ${escapeHtml(
+          formatList(data.currentUser.globalRoles, copy.none)
+        )}</p>
+        <p class="muted">${escapeHtml(copy.tenantMemberships)}: ${escapeHtml(tenantMemberships)}</p>
+      </article>
+      <article class="panel">
+        <h3>${escapeHtml(copy.inventoryImport)}</h3>
+        <p class="muted">${escapeHtml(copy.latestImport)}: ${escapeHtml(latestImportSummary)}</p>
+        <p class="muted">${escapeHtml(
+          interpolateCopy(copy.latestImportCounts, {
+            nodes: data.inventory.nodes.length,
+            zones: data.inventory.zones.length,
+            apps: data.inventory.apps.length,
+            databases: data.inventory.databases.length
+          })
+        )}</p>
+      </article>
+      <article class="panel">
+        <h3>${escapeHtml(copy.latestReconciliation)}</h3>
+        ${latestReconciliationSummary}
+      </article>
+    </div>
+  </section>`;
+
+  const topbarHtml = `<div class="stack" style="gap:0.2rem;">
+    <strong>${escapeHtml(data.currentUser.displayName)}</strong>
+    <span class="muted">${escapeHtml(data.currentUser.email)}</span>
+  </div>
+  <div class="topbar-actions">
+    <form method="post" action="/preferences/locale" class="inline-form">
+      <input type="hidden" name="returnTo" value="${escapeHtml(currentPath)}" />
+      <label>
+        <span>${escapeHtml(copy.languageLabel)}</span>
+        <select
+          name="locale"
+          onchange="const returnTo=this.form.querySelector('[name=returnTo]'); if (returnTo instanceof HTMLInputElement) { returnTo.value = window.location.pathname + window.location.search + window.location.hash; } this.form.submit();"
+        >
+          <option value="es"${locale === "es" ? " selected" : ""}>ES</option>
+          <option value="en"${locale === "en" ? " selected" : ""}>EN</option>
+        </select>
+      </label>
+    </form>
     <form method="post" action="/auth/logout" class="inline-form">
-      <button class="danger" type="submit">Sign out</button>
+      <button class="danger" type="submit">${escapeHtml(copy.signOutLabel)}</button>
     </form>
   </div>`;
 
-  const nodeHealthRows = data.nodeHealth
-    .map(
-      (node) => `<tr>
-        <td class="mono">${escapeHtml(node.nodeId)}</td>
-        <td>${escapeHtml(node.hostname)}</td>
-        <td>${node.currentVersion ? renderPill(node.currentVersion, "muted") : "-"}</td>
-        <td>${renderPill(String(node.pendingJobCount), node.pendingJobCount > 0 ? "danger" : "success")}</td>
-        <td>${node.latestJobStatus ? renderPill(node.latestJobStatus, node.latestJobStatus === "failed" ? "danger" : node.latestJobStatus === "applied" ? "success" : "muted") : "-"}</td>
-        <td>${escapeHtml(node.latestJobSummary ?? "-")}</td>
-        <td>${escapeHtml(formatDate(node.lastSeenAt))}</td>
-      </tr>`
-    )
-    .join("");
+  const sidebarGroups: AdminNavGroup[] = [
+    {
+      id: "control-plane",
+      label: copy.navControlPlane,
+      items: [
+        {
+          id: "overview",
+          label: copy.navOverview,
+          href: "#section-overview",
+          keywords: [copy.overviewTitle, copy.managedNodes, copy.pendingJobs]
+        },
+        {
+          id: "context",
+          label: copy.navContext,
+          href: "#section-context",
+          keywords: [copy.usersAndScope, copy.inventoryImport, copy.latestReconciliation]
+        }
+      ]
+    },
+    {
+      id: "operations",
+      label: copy.navOperations,
+      items: [
+        {
+          id: "node-health",
+          label: copy.navNodeHealth,
+          href: "#section-node-health",
+          badge: String(data.nodeHealth.length)
+        },
+        {
+          id: "resource-drift",
+          label: copy.navDrift,
+          href: "#section-resource-drift",
+          badge: String(data.overview.driftedResourceCount)
+        },
+        {
+          id: "job-history",
+          label: copy.navJobs,
+          href: "#section-job-history",
+          badge: String(data.jobHistory.length)
+        },
+        {
+          id: "backups",
+          label: copy.navBackups,
+          href: "#section-backups",
+          badge: String(data.backups.latestRuns.length)
+        }
+      ]
+    },
+    {
+      id: "desired-state",
+      label: copy.navResources,
+      items: [
+        { id: "create", label: copy.navCreate, href: "#desired-state-create" },
+        {
+          id: "tenants",
+          label: copy.navTenants,
+          href: "#desired-state-tenants",
+          badge: String(data.desiredState.spec.tenants.length)
+        },
+        {
+          id: "nodes",
+          label: copy.navNodes,
+          href: "#desired-state-nodes",
+          badge: String(data.desiredState.spec.nodes.length)
+        },
+        {
+          id: "zones",
+          label: copy.navZones,
+          href: "#desired-state-zones",
+          badge: String(data.desiredState.spec.zones.length)
+        },
+        {
+          id: "apps",
+          label: copy.navApps,
+          href: "#desired-state-apps",
+          badge: String(data.desiredState.spec.apps.length)
+        },
+        {
+          id: "databases",
+          label: copy.navDatabases,
+          href: "#desired-state-databases",
+          badge: String(data.desiredState.spec.databases.length)
+        },
+        {
+          id: "backup-policies",
+          label: copy.navBackupPolicies,
+          href: "#desired-state-backups",
+          badge: String(data.desiredState.spec.backupPolicies.length)
+        }
+      ]
+    }
+  ];
 
-  const driftRows = data.drift
-    .map(
-      (entry) => `<tr>
-        <td>${escapeHtml(entry.resourceKind)}</td>
-        <td class="mono">${escapeHtml(entry.resourceKey)}</td>
-        <td class="mono">${escapeHtml(entry.nodeId)}</td>
-        <td>${renderPill(
-          entry.driftStatus,
-          entry.driftStatus === "in_sync"
-            ? "success"
-            : entry.driftStatus === "pending"
-              ? "muted"
-              : "danger"
-        )}</td>
-        <td>${entry.latestJobStatus ? renderPill(entry.latestJobStatus, entry.latestJobStatus === "applied" ? "success" : "danger") : "-"}</td>
-        <td>${escapeHtml(entry.latestSummary ?? "-")}</td>
-      </tr>`
-    )
-    .join("");
-
-  const jobRows = data.jobHistory
-    .map(
-      (job) => `<tr>
-        <td class="mono">${escapeHtml(job.jobId)}</td>
-        <td>${escapeHtml(job.kind)}</td>
-        <td class="mono">${escapeHtml(job.nodeId)}</td>
-        <td>${job.status ? renderPill(job.status, job.status === "applied" ? "success" : job.status === "failed" ? "danger" : "muted") : renderPill("queued", "muted")}</td>
-        <td>${escapeHtml(job.dispatchReason ?? "-")}</td>
-        <td>${escapeHtml(job.summary ?? "-")}</td>
-        <td>${escapeHtml(formatDate(job.createdAt))}</td>
-      </tr>`
-    )
-    .join("");
-
-  const backupRows = data.backups.latestRuns
-    .map(
-      (run) => `<tr>
-        <td class="mono">${escapeHtml(run.policySlug)}</td>
-        <td class="mono">${escapeHtml(run.nodeId)}</td>
-        <td>${renderPill(run.status, run.status === "succeeded" ? "success" : run.status === "failed" ? "danger" : "muted")}</td>
-        <td>${escapeHtml(run.summary)}</td>
-        <td>${escapeHtml(formatDate(run.startedAt))}</td>
-      </tr>`
-    )
-    .join("");
-
-  const inventoryPanels = `<section class="grid grid-three">
-    <article class="panel">
-      <h2>Users and scope</h2>
-      <p><strong>${escapeHtml(data.currentUser.displayName)}</strong> &lt;${escapeHtml(
-        data.currentUser.email
-      )}&gt;</p>
-      <p class="muted">Global roles: ${escapeHtml(formatList(data.currentUser.globalRoles))}</p>
-      <p class="muted">Tenant memberships: ${escapeHtml(
-        data.currentUser.tenantMemberships.length > 0
-          ? data.currentUser.tenantMemberships
-              .map((membership) => `${membership.tenantSlug}:${membership.role}`)
-              .join(", ")
-          : "none"
-      )}</p>
-    </article>
-    <article class="panel">
-      <h2>Inventory import</h2>
-      <p class="muted">Latest import: ${escapeHtml(
-        data.inventory.latestImport
-          ? `${formatDate(data.inventory.latestImport.importedAt)} from ${data.inventory.latestImport.sourcePath}`
-          : "never"
-      )}</p>
-      <p class="muted">Nodes ${data.inventory.nodes.length}, zones ${data.inventory.zones.length}, apps ${data.inventory.apps.length}, databases ${data.inventory.databases.length}</p>
-    </article>
-    <article class="panel">
-      <h2>Latest reconciliation</h2>
-      ${
-        data.overview.latestReconciliation
-          ? `<p class="muted">Version ${escapeHtml(
-              data.overview.latestReconciliation.desiredStateVersion
-            )}</p>
-             <p class="muted">Generated ${data.overview.latestReconciliation.generatedJobCount}, skipped ${data.overview.latestReconciliation.skippedJobCount}, missing secrets ${data.overview.latestReconciliation.missingCredentialCount}</p>`
-          : '<p class="muted">No reconciliation run recorded yet.</p>'
-      }
-    </article>
-  </section>`;
-
-  const operationsPanels = `<section class="grid grid-two">
-    <article class="panel">
-      <h2>Node Health</h2>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Node</th><th>Hostname</th><th>Version</th><th>Pending</th><th>Latest status</th><th>Latest summary</th><th>Last seen</th></tr>
-          </thead>
-          <tbody>${nodeHealthRows || '<tr><td colspan="7" class="muted">No nodes.</td></tr>'}</tbody>
-        </table>
-      </div>
-    </article>
-    <article class="panel">
-      <h2>Resource Drift</h2>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Kind</th><th>Resource</th><th>Node</th><th>Drift</th><th>Latest status</th><th>Summary</th></tr>
-          </thead>
-          <tbody>${driftRows || '<tr><td colspan="6" class="muted">No drift records.</td></tr>'}</tbody>
-        </table>
-      </div>
-    </article>
-    <article class="panel">
-      <h2>Job History</h2>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Job</th><th>Kind</th><th>Node</th><th>Status</th><th>Reason</th><th>Summary</th><th>Created</th></tr>
-          </thead>
-          <tbody>${jobRows || '<tr><td colspan="7" class="muted">No jobs.</td></tr>'}</tbody>
-        </table>
-      </div>
-    </article>
-    <article class="panel">
-      <h2>Backups</h2>
-      <p class="muted">Configured policies: ${data.backups.policies.length}</p>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Policy</th><th>Node</th><th>Status</th><th>Summary</th><th>Started</th></tr>
-          </thead>
-          <tbody>${backupRows || '<tr><td colspan="5" class="muted">No backup runs.</td></tr>'}</tbody>
-        </table>
-      </div>
-    </article>
-  </section>`;
-
-  return renderPanelShell({
-    title: "SimpleHostPanel",
-    heading: "SimpleHostPanel",
-    eyebrow: `web runtime ${config.version}`,
+  return renderAdminShell({
+    lang: locale,
+    title: copy.appName,
+    appName: copy.appName,
+    heading: copy.dashboardHeading,
+    eyebrow: copy.eyebrow,
+    subheading: copy.dashboardSubheading,
     notice,
-    actions: actionBar,
+    topbarHtml,
+    versionLabel: copy.versionLabel,
+    versionValue: config.version,
+    sidebarSearchPlaceholder: copy.sidebarSearchPlaceholder,
+    sidebarGroups,
     body: [
-      `<section class="grid">${renderStats(data.overview)}</section>`,
-      inventoryPanels,
-      operationsPanels,
-      renderDesiredStateSection(data)
+      `<section id="section-overview" class="panel section-panel">
+        <div class="section-head">
+          <div>
+            <h2>${escapeHtml(copy.overviewTitle)}</h2>
+            <p class="muted section-description">${escapeHtml(copy.dashboardSubheading)}</p>
+          </div>
+        </div>
+        ${renderStats(data.overview, copy, locale)}
+        ${actionBar}
+      </section>`,
+      contextSection,
+      renderDataTable({
+        id: "section-node-health",
+        heading: copy.nodeHealthTitle,
+        description: copy.nodeHealthDescription,
+        columns: [
+          { label: copy.nodeColNode, className: "mono" },
+          { label: copy.nodeColHostname },
+          { label: copy.nodeColVersion },
+          { label: copy.nodeColPending },
+          { label: copy.nodeColLatestStatus },
+          { label: copy.nodeColLatestSummary },
+          { label: copy.nodeColLastSeen }
+        ],
+        rows: nodeHealthRows,
+        emptyMessage: copy.noNodes,
+        filterPlaceholder: copy.dataFilterPlaceholder,
+        rowsPerPageLabel: copy.rowsPerPage,
+        showingLabel: copy.showing,
+        ofLabel: copy.of,
+        recordsLabel: copy.records,
+        defaultPageSize: 10
+      }),
+      renderDataTable({
+        id: "section-resource-drift",
+        heading: copy.resourceDriftTitle,
+        description: copy.resourceDriftDescription,
+        columns: [
+          { label: copy.driftColKind },
+          { label: copy.driftColResource, className: "mono" },
+          { label: copy.driftColNode, className: "mono" },
+          { label: copy.driftColDrift },
+          { label: copy.driftColLatestStatus },
+          { label: copy.driftColSummary }
+        ],
+        rows: driftRows,
+        emptyMessage: copy.noDrift,
+        filterPlaceholder: copy.dataFilterPlaceholder,
+        rowsPerPageLabel: copy.rowsPerPage,
+        showingLabel: copy.showing,
+        ofLabel: copy.of,
+        recordsLabel: copy.records,
+        defaultPageSize: 10
+      }),
+      renderDataTable({
+        id: "section-job-history",
+        heading: copy.jobHistoryTitle,
+        description: copy.jobHistoryDescription,
+        columns: [
+          { label: copy.jobColJob, className: "mono" },
+          { label: copy.jobColKind },
+          { label: copy.jobColNode, className: "mono" },
+          { label: copy.jobColStatus },
+          { label: copy.jobColReason },
+          { label: copy.jobColSummary },
+          { label: copy.jobColCreated }
+        ],
+        rows: jobRows,
+        emptyMessage: copy.noJobs,
+        filterPlaceholder: copy.dataFilterPlaceholder,
+        rowsPerPageLabel: copy.rowsPerPage,
+        showingLabel: copy.showing,
+        ofLabel: copy.of,
+        recordsLabel: copy.records,
+        defaultPageSize: 10
+      }),
+      renderDataTable({
+        id: "section-backups",
+        heading: copy.backupsTitle,
+        description: copy.backupsDescription,
+        columns: [
+          { label: copy.backupColPolicy, className: "mono" },
+          { label: copy.backupColNode, className: "mono" },
+          { label: copy.backupColStatus },
+          { label: copy.backupColSummary },
+          { label: copy.backupColStarted }
+        ],
+        rows: backupRows,
+        emptyMessage: copy.noBackups,
+        filterPlaceholder: copy.dataFilterPlaceholder,
+        rowsPerPageLabel: copy.rowsPerPage,
+        showingLabel: copy.showing,
+        ofLabel: copy.of,
+        recordsLabel: copy.records,
+        defaultPageSize: 10
+      }),
+      renderDesiredStateSection(data, copy)
     ].join("")
   });
 }
@@ -1112,15 +1780,20 @@ async function requireSessionToken(request: IncomingMessage): Promise<string> {
 async function handleDashboard(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const token = readSessionToken(request);
   const url = new URL(request.url ?? "/", "http://127.0.0.1");
+  const locale = readLocale(request);
 
   if (!token) {
-    writeHtml(response, 200, renderLoginPage(getNoticeFromUrl(url)));
+    writeHtml(response, 200, renderLoginPage(locale, getNoticeFromUrl(url)));
     return;
   }
 
   try {
     const data = await loadDashboardData(token);
-    writeHtml(response, 200, renderDashboard(data, getNoticeFromUrl(url)));
+    writeHtml(
+      response,
+      200,
+      renderDashboard(data, locale, sanitizeReturnTo(`${url.pathname}${url.search}`), getNoticeFromUrl(url))
+    );
   } catch (error) {
     if (error instanceof WebApiError && error.statusCode === 401) {
       redirect(response, "/login", clearSessionCookie());
@@ -1130,7 +1803,7 @@ async function handleDashboard(request: IncomingMessage, response: ServerRespons
     writeHtml(
       response,
       500,
-      renderLoginPage({
+      renderLoginPage(locale, {
         kind: "error",
         message: error instanceof Error ? error.message : String(error)
       })
@@ -1143,6 +1816,7 @@ async function requestHandler(
   response: ServerResponse
 ): Promise<void> {
   const url = new URL(request.url ?? "/", "http://127.0.0.1");
+  const locale = readLocale(request);
 
   if (request.method === "GET" && url.pathname === "/healthz") {
     writeJson(response, 200, {
@@ -1168,6 +1842,16 @@ async function requestHandler(
     return;
   }
 
+  if (request.method === "POST" && url.pathname === "/preferences/locale") {
+    const form = await readFormBody(request);
+    redirect(
+      response,
+      sanitizeReturnTo(form.get("returnTo")),
+      serializeLocaleCookie(normalizeLocale(form.get("locale")))
+    );
+    return;
+  }
+
   if (request.method === "POST" && url.pathname === "/auth/login") {
     const form = await readFormBody(request);
 
@@ -1189,7 +1873,7 @@ async function requestHandler(
       writeHtml(
         response,
         error instanceof WebApiError ? error.statusCode : 500,
-        renderLoginPage({
+        renderLoginPage(locale, {
           kind: "error",
           message: error instanceof Error ? error.message : String(error)
         })
@@ -1537,6 +2221,8 @@ async function requestHandler(
 export function startPanelWeb(): ReturnType<typeof createServer> {
   const server = createServer((request, response) => {
     void requestHandler(request, response).catch((error: unknown) => {
+      const locale = readLocale(request);
+
       if (error instanceof WebApiError && error.statusCode === 401) {
         redirect(response, "/login?notice=Session%20required&kind=error", clearSessionCookie());
         return;
@@ -1545,7 +2231,7 @@ export function startPanelWeb(): ReturnType<typeof createServer> {
       writeHtml(
         response,
         error instanceof WebApiError ? error.statusCode : 500,
-        renderLoginPage({
+        renderLoginPage(locale, {
           kind: "error",
           message: error instanceof Error ? error.message : String(error)
         })

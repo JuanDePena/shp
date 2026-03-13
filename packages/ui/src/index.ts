@@ -46,6 +46,7 @@ export interface AdminShellProps {
 export interface TabItem {
   id: string;
   label: string;
+  badge?: string;
   panelHtml: string;
 }
 
@@ -323,6 +324,9 @@ function renderBaseStyleBlock(): string {
 
       .table-wrap {
         overflow-x: auto;
+        border: 1px solid rgba(13, 32, 56, 0.08);
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.72);
       }
 
       table {
@@ -339,10 +343,14 @@ function renderBaseStyleBlock(): string {
       }
 
       th {
-        color: var(--muted);
-        font-size: 0.8rem;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        color: var(--navy-soft);
+        font-size: 0.77rem;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.11em;
+        background: rgba(216, 229, 244, 0.95);
       }
 
       .pill {
@@ -527,7 +535,11 @@ export function renderTabs(props: TabsProps): string {
         data-tab-button
         data-tab-target="${escapeHtml(tab.id)}"
         aria-selected="${tab.id === firstTabId || (!firstTabId && index === 0) ? "true" : "false"}"
-      >${escapeHtml(tab.label)}</button>`
+      ><span>${escapeHtml(tab.label)}</span>${
+        tab.badge
+          ? `<span class="tab-badge${tab.badge === "0" ? " tab-badge-zero" : ""}">${escapeHtml(tab.badge)}</span>`
+          : ""
+      }</button>`
     )
     .join("");
 
@@ -576,13 +588,20 @@ export function renderDataTable(props: DataTableProps): string {
     .join("");
 
   const emptyRowHtml = `<tr data-table-empty${props.rows.length === 0 ? "" : " hidden"}>
-    <td colspan="${String(props.columns.length)}" class="muted">${escapeHtml(props.emptyMessage)}</td>
+    <td colspan="${String(props.columns.length)}" class="data-table-empty-cell">
+      <div class="data-table-empty">
+        <strong>${escapeHtml(props.emptyMessage)}</strong>
+      </div>
+    </td>
   </tr>`;
 
   return `<section id="${escapeHtml(props.id)}" class="panel section-panel">
     <div class="section-head">
       <div>
-        <h2>${escapeHtml(props.heading)}</h2>
+        <div class="section-title-row">
+          <h2>${escapeHtml(props.heading)}</h2>
+          <span class="section-badge">${String(props.rows.length)}</span>
+        </div>
         ${
           props.description
             ? `<p class="muted section-description">${escapeHtml(props.description)}</p>`
@@ -656,7 +675,11 @@ export function renderAdminShell(props: AdminShellProps): string {
             )}"
           >
             <span>${escapeHtml(item.label)}</span>
-            ${item.badge ? `<span class="sidebar-badge">${escapeHtml(item.badge)}</span>` : ""}
+            ${
+              item.badge
+                ? `<span class="sidebar-badge${item.badge === "0" ? " sidebar-badge-zero" : ""}">${escapeHtml(item.badge)}</span>`
+                : ""
+            }
           </a>`
         )
         .join("");
@@ -786,12 +809,31 @@ ${renderBaseStyleBlock()}
         background: rgba(183, 243, 77, 0.08);
       }
 
+      .sidebar-link.active {
+        border-color: rgba(183, 243, 77, 0.24);
+        background:
+          linear-gradient(135deg, rgba(183, 243, 77, 0.2), rgba(242, 140, 40, 0.18)),
+          rgba(255, 255, 255, 0.08);
+        color: #ffffff;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+      }
+
+      .sidebar-link.active .sidebar-badge {
+        background: rgba(10, 23, 48, 0.36);
+        color: #ffffff;
+      }
+
       .sidebar-badge {
         padding: 0.15rem 0.45rem;
         border-radius: 999px;
         background: rgba(242, 140, 40, 0.22);
         color: #ffd9ae;
         font-size: 0.74rem;
+      }
+
+      .sidebar-badge-zero {
+        background: rgba(239, 247, 255, 0.08);
+        color: rgba(239, 247, 255, 0.62);
       }
 
       .sidebar-footer {
@@ -846,6 +888,46 @@ ${renderBaseStyleBlock()}
         min-width: 5rem;
       }
 
+      .profile-card {
+        display: flex;
+        align-items: center;
+        gap: 0.95rem;
+      }
+
+      .profile-avatar {
+        width: 3rem;
+        height: 3rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: linear-gradient(135deg, var(--navy-strong), var(--navy-soft));
+        color: #f6fbff;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        box-shadow: 0 0.8rem 1.8rem rgba(16, 39, 68, 0.18);
+      }
+
+      .profile-copy {
+        display: grid;
+        gap: 0.08rem;
+      }
+
+      .profile-kicker {
+        color: var(--muted);
+        font-size: 0.74rem;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+      }
+
+      .profile-name {
+        font-size: 1.04rem;
+      }
+
+      .profile-meta {
+        color: var(--muted);
+      }
+
       .page-header {
         display: grid;
         gap: 0.45rem;
@@ -884,6 +966,78 @@ ${renderBaseStyleBlock()}
         margin: 0.2rem 0 0;
       }
 
+      .section-title-row {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.65rem;
+      }
+
+      .section-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 2rem;
+        height: 2rem;
+        padding: 0 0.6rem;
+        border-radius: 999px;
+        background: rgba(16, 39, 68, 0.08);
+        color: var(--navy-strong);
+        font-size: 0.84rem;
+        font-weight: 700;
+      }
+
+      .action-grid {
+        display: grid;
+        gap: 1rem;
+        margin-top: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+      }
+
+      .action-card {
+        display: grid;
+        gap: 0.75rem;
+        padding: 1rem;
+        border-radius: 1.1rem;
+        border: 1px solid rgba(13, 32, 56, 0.1);
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(238, 244, 251, 0.92)),
+          linear-gradient(145deg, rgba(16, 39, 68, 0.05), rgba(183, 243, 77, 0.05));
+      }
+
+      .action-card h3,
+      .action-card p {
+        margin: 0;
+      }
+
+      .action-card form {
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      .action-card-strong {
+        background:
+          linear-gradient(145deg, rgba(16, 39, 68, 0.98), rgba(24, 54, 91, 0.94)),
+          radial-gradient(circle at top left, rgba(183, 243, 77, 0.14), transparent 12rem);
+        color: #f6fbff;
+      }
+
+      .action-card-strong .muted {
+        color: rgba(246, 251, 255, 0.74);
+      }
+
+      .action-card-accent {
+        background:
+          linear-gradient(145deg, rgba(242, 140, 40, 0.16), rgba(255, 255, 255, 0.96)),
+          linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(250, 241, 229, 0.92));
+      }
+
+      .action-eyebrow {
+        color: var(--muted);
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+      }
+
       .tabs {
         display: grid;
         gap: 1rem;
@@ -896,6 +1050,9 @@ ${renderBaseStyleBlock()}
       }
 
       .tab-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
         background: rgba(16, 39, 68, 0.08);
         color: var(--navy-soft);
         box-shadow: none;
@@ -906,6 +1063,35 @@ ${renderBaseStyleBlock()}
         background: linear-gradient(135deg, rgba(16, 39, 68, 0.98), rgba(24, 54, 91, 0.96));
         color: #f6fbff;
         border-color: rgba(183, 243, 77, 0.18);
+      }
+
+      .tab-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.7rem;
+        height: 1.7rem;
+        padding: 0 0.45rem;
+        border-radius: 999px;
+        background: rgba(242, 140, 40, 0.22);
+        color: var(--accent);
+        font-size: 0.76rem;
+        font-weight: 700;
+      }
+
+      .tab-button.active .tab-badge {
+        background: rgba(255, 255, 255, 0.14);
+        color: #ffffff;
+      }
+
+      .tab-badge-zero {
+        background: rgba(13, 32, 56, 0.08);
+        color: var(--muted);
+      }
+
+      .tab-button.active .tab-badge-zero {
+        background: rgba(255, 255, 255, 0.12);
+        color: rgba(255, 255, 255, 0.8);
       }
 
       .tab-panel {
@@ -963,6 +1149,29 @@ ${renderBaseStyleBlock()}
       .data-table-pagination button {
         min-width: 2.8rem;
         padding-inline: 0.8rem;
+      }
+
+      tbody tr:nth-child(odd) td {
+        background: rgba(255, 255, 255, 0.55);
+      }
+
+      tbody tr:hover td {
+        background: rgba(183, 243, 77, 0.12);
+      }
+
+      .data-table-empty-cell {
+        padding: 1.4rem 1rem;
+        border-bottom: none;
+      }
+
+      .data-table-empty {
+        display: grid;
+        place-items: center;
+        min-height: 7rem;
+        border: 1px dashed rgba(13, 32, 56, 0.14);
+        border-radius: 0.95rem;
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.76);
       }
 
       .topbar-actions button,
@@ -1050,6 +1259,59 @@ ${renderBaseStyleBlock()}
         const sidebarSearch = document.querySelector("[data-sidebar-search]");
         const navItems = Array.from(document.querySelectorAll("[data-nav-item]"));
         const navGroups = Array.from(document.querySelectorAll("[data-nav-group]"));
+        let navScrollTicking = false;
+
+        const setActiveNav = (targetId) => {
+          navItems.forEach((item) => {
+            const href = item.getAttribute("href");
+            item.classList.toggle("active", href === "#" + targetId);
+          });
+        };
+
+        const syncActiveNav = () => {
+          const currentHash = window.location.hash.slice(1);
+          if (currentHash) {
+            setActiveNav(currentHash);
+            return;
+          }
+
+          const candidates = Array.from(
+            document.querySelectorAll(".section-panel, [data-tab-panel]")
+          ).filter((node) => !(node instanceof HTMLElement && node.hidden));
+
+          let activeId = "";
+          let bestDistance = Number.POSITIVE_INFINITY;
+
+          candidates.forEach((node) => {
+            if (!(node instanceof HTMLElement) || !node.id) {
+              return;
+            }
+
+            const rect = node.getBoundingClientRect();
+            if (rect.bottom <= 120) {
+              return;
+            }
+
+            const distance = Math.abs(rect.top - 160);
+            if (rect.top <= 220 && distance < bestDistance) {
+              activeId = node.id;
+              bestDistance = distance;
+            }
+          });
+
+          if (!activeId) {
+            const firstVisible = candidates.find(
+              (node) => node instanceof HTMLElement && node.id
+            );
+            if (firstVisible instanceof HTMLElement) {
+              activeId = firstVisible.id;
+            }
+          }
+
+          if (activeId) {
+            setActiveNav(activeId);
+          }
+        };
 
         if (sidebarSearch instanceof HTMLInputElement) {
           const updateSidebar = () => {
@@ -1096,6 +1358,8 @@ ${renderBaseStyleBlock()}
           if (updateHash) {
             history.replaceState(null, "", "#" + targetId);
           }
+
+          syncActiveNav();
         };
 
         tabRoots.forEach((root) => {
@@ -1122,6 +1386,7 @@ ${renderBaseStyleBlock()}
         window.addEventListener("hashchange", () => {
           const currentHash = window.location.hash.slice(1);
           if (!currentHash) {
+            syncActiveNav();
             return;
           }
 
@@ -1130,7 +1395,36 @@ ${renderBaseStyleBlock()}
               activateTab(root, currentHash, false);
             }
           });
+
+          syncActiveNav();
         });
+
+        navItems.forEach((item) => {
+          item.addEventListener("click", () => {
+            const href = item.getAttribute("href");
+            if (href && href.startsWith("#")) {
+              setActiveNav(href.slice(1));
+            }
+          });
+        });
+
+        document.addEventListener(
+          "scroll",
+          () => {
+            if (navScrollTicking) {
+              return;
+            }
+
+            navScrollTicking = true;
+            window.requestAnimationFrame(() => {
+              syncActiveNav();
+              navScrollTicking = false;
+            });
+          },
+          { passive: true }
+        );
+
+        syncActiveNav();
 
         document.querySelectorAll("[data-data-table]").forEach((root) => {
           const filterInput = root.querySelector("[data-table-filter]");

@@ -90,9 +90,13 @@ interface WebCopy {
   navBackupPolicies: string;
   dashboardHeading: string;
   dashboardSubheading: string;
+  overviewDescription: string;
   actionsRunReconciliation: string;
   actionsImportInventory: string;
   actionsDownloadYaml: string;
+  actionPlanDescription: string;
+  actionImportDescription: string;
+  actionExportDescription: string;
   overviewTitle: string;
   managedNodes: string;
   pendingJobs: string;
@@ -198,9 +202,13 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     navBackupPolicies: "Backup policies",
     dashboardHeading: "Control plane",
     dashboardSubheading: "Operate nodes, jobs, backups, and desired state from a single control surface.",
+    overviewDescription: "Live platform counts plus the main control-plane actions.",
     actionsRunReconciliation: "Run reconciliation",
     actionsImportInventory: "Import YAML inventory",
     actionsDownloadYaml: "Download desired-state YAML",
+    actionPlanDescription: "Compare desired state against the last successful apply and dispatch missing work.",
+    actionImportDescription: "Refresh PostgreSQL desired state from the bootstrap YAML inventory path.",
+    actionExportDescription: "Export the current desired state for audit, review, or disaster recovery.",
     overviewTitle: "Operations overview",
     managedNodes: "Managed nodes",
     pendingJobs: "Pending jobs",
@@ -304,9 +312,13 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     navBackupPolicies: "Políticas de backup",
     dashboardHeading: "Plano de control",
     dashboardSubheading: "Opera nodos, jobs, backups y estado deseado desde una sola consola.",
+    overviewDescription: "Conteos vivos de la plataforma y las acciones principales del control plane.",
     actionsRunReconciliation: "Ejecutar reconciliación",
     actionsImportInventory: "Importar inventario YAML",
     actionsDownloadYaml: "Descargar YAML del estado deseado",
+    actionPlanDescription: "Compara el estado deseado contra la última aplicación exitosa y despacha el trabajo faltante.",
+    actionImportDescription: "Refresca el estado deseado en PostgreSQL desde la ruta actual del inventario YAML.",
+    actionExportDescription: "Exporta el estado deseado actual para auditoría, revisión o recuperación.",
     overviewTitle: "Resumen operativo",
     managedNodes: "Nodos gestionados",
     pendingJobs: "Jobs pendientes",
@@ -570,6 +582,18 @@ function formatDate(value: string | undefined, locale: WebLocale): string {
 
 function formatList(values: string[], emptyValue = "-"): string {
   return values.length > 0 ? values.join(", ") : emptyValue;
+}
+
+function getInitials(value: string): string {
+  const initials = value
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+
+  return initials || "SH";
 }
 
 function interpolateCopy(
@@ -1127,36 +1151,43 @@ function renderDesiredStateSection(data: DashboardData, copy: WebCopy): string {
     {
       id: "desired-state-create",
       label: copy.tabCreate,
+      badge: "+",
       panelHtml: createPanelHtml
     },
     {
       id: "desired-state-tenants",
       label: copy.tabTenants,
+      badge: String(data.desiredState.spec.tenants.length),
       panelHtml: `<article class="panel"><h3>Tenants</h3>${tenantRows || '<p class="empty">No tenants.</p>'}</article>`
     },
     {
       id: "desired-state-nodes",
       label: copy.tabNodes,
+      badge: String(data.desiredState.spec.nodes.length),
       panelHtml: `<article class="panel"><h3>Nodes</h3>${nodeRows || '<p class="empty">No nodes.</p>'}</article>`
     },
     {
       id: "desired-state-zones",
       label: copy.tabZones,
+      badge: String(data.desiredState.spec.zones.length),
       panelHtml: `<article class="panel"><h3>Zones</h3>${zoneRows || '<p class="empty">No zones.</p>'}</article>`
     },
     {
       id: "desired-state-apps",
       label: copy.tabApps,
+      badge: String(data.desiredState.spec.apps.length),
       panelHtml: `<article class="panel"><h3>Apps</h3>${appRows || '<p class="empty">No apps.</p>'}</article>`
     },
     {
       id: "desired-state-databases",
       label: copy.tabDatabases,
+      badge: String(data.desiredState.spec.databases.length),
       panelHtml: `<article class="panel"><h3>Databases</h3>${databaseRows || '<p class="empty">No databases.</p>'}</article>`
     },
     {
       id: "desired-state-backups",
       label: copy.tabBackupPolicies,
+      badge: String(data.desiredState.spec.backupPolicies.length),
       panelHtml: `<article class="panel"><h3>Backup policies</h3>${backupRows || '<p class="empty">No backup policies.</p>'}</article>`
     }
   ];
@@ -1183,17 +1214,34 @@ function renderDashboard(
   notice?: PanelNotice
 ): string {
   const copy = copyByLocale[locale];
-  const actionBar = `<div class="toolbar">
-    <form method="post" action="/actions/reconcile-run" class="inline-form">
-      <button type="submit">${escapeHtml(copy.actionsRunReconciliation)}</button>
-    </form>
-    <form method="post" action="/actions/inventory-import" class="inline-form">
-      <input type="text" name="path" value="${escapeHtml(
-        data.inventory.latestImport?.sourcePath ?? config.inventory.importPath
-      )}" style="min-width: 22rem;" />
-      <button class="secondary" type="submit">${escapeHtml(copy.actionsImportInventory)}</button>
-    </form>
-    <a class="button-link secondary" href="/inventory/export">${escapeHtml(copy.actionsDownloadYaml)}</a>
+  const actionBar = `<div class="action-grid">
+    <article class="action-card action-card-strong">
+      <span class="action-eyebrow">Planner</span>
+      <h3>${escapeHtml(copy.actionsRunReconciliation)}</h3>
+      <p class="muted">${escapeHtml(copy.actionPlanDescription)}</p>
+      <form method="post" action="/actions/reconcile-run">
+        <button type="submit">${escapeHtml(copy.actionsRunReconciliation)}</button>
+      </form>
+    </article>
+    <article class="action-card">
+      <span class="action-eyebrow">Inventory</span>
+      <h3>${escapeHtml(copy.actionsImportInventory)}</h3>
+      <p class="muted">${escapeHtml(copy.actionImportDescription)}</p>
+      <form method="post" action="/actions/inventory-import" class="stack">
+        <input type="text" name="path" value="${escapeHtml(
+          data.inventory.latestImport?.sourcePath ?? config.inventory.importPath
+        )}" />
+        <button class="secondary" type="submit">${escapeHtml(copy.actionsImportInventory)}</button>
+      </form>
+    </article>
+    <article class="action-card action-card-accent">
+      <span class="action-eyebrow">Export</span>
+      <h3>${escapeHtml(copy.actionsDownloadYaml)}</h3>
+      <p class="muted">${escapeHtml(copy.actionExportDescription)}</p>
+      <a class="button-link secondary" href="/inventory/export">${escapeHtml(
+        copy.actionsDownloadYaml
+      )}</a>
+    </article>
   </div>`;
 
   const nodeHealthRows: DataTableRow[] = data.nodeHealth.map((node) => ({
@@ -1363,9 +1411,13 @@ function renderDashboard(
     </div>
   </section>`;
 
-  const topbarHtml = `<div class="stack" style="gap:0.2rem;">
-    <strong>${escapeHtml(data.currentUser.displayName)}</strong>
-    <span class="muted">${escapeHtml(data.currentUser.email)}</span>
+  const topbarHtml = `<div class="profile-card">
+    <span class="profile-avatar">${escapeHtml(getInitials(data.currentUser.displayName))}</span>
+    <div class="profile-copy">
+      <span class="profile-kicker">${escapeHtml(copy.eyebrow)}</span>
+      <strong class="profile-name">${escapeHtml(data.currentUser.displayName)}</strong>
+      <span class="profile-meta">${escapeHtml(data.currentUser.email)}</span>
+    </div>
   </div>
   <div class="topbar-actions">
     <form method="post" action="/preferences/locale" class="inline-form">
@@ -1498,7 +1550,7 @@ function renderDashboard(
         <div class="section-head">
           <div>
             <h2>${escapeHtml(copy.overviewTitle)}</h2>
-            <p class="muted section-description">${escapeHtml(copy.dashboardSubheading)}</p>
+            <p class="muted section-description">${escapeHtml(copy.overviewDescription)}</p>
           </div>
         </div>
         ${renderStats(data.overview, copy, locale)}
@@ -1866,7 +1918,7 @@ async function requestHandler(
 
       redirect(
         response,
-        noticeLocation(`Signed in as ${login.user.email}.`, "success"),
+        "/",
         serializeSessionCookie(login.sessionToken, login.expiresAt)
       );
     } catch (error) {

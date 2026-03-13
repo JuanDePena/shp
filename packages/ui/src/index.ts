@@ -19,6 +19,7 @@ export interface AdminNavItem {
   href: string;
   keywords?: string[];
   badge?: string;
+  active?: boolean;
 }
 
 export interface AdminNavGroup {
@@ -47,6 +48,7 @@ export interface TabItem {
   id: string;
   label: string;
   badge?: string;
+  href?: string;
   panelHtml: string;
 }
 
@@ -534,6 +536,7 @@ export function renderTabs(props: TabsProps): string {
         class="tab-button${tab.id === firstTabId || (!firstTabId && index === 0) ? " active" : ""}"
         data-tab-button
         data-tab-target="${escapeHtml(tab.id)}"
+        ${tab.href ? `data-tab-href="${escapeHtml(tab.href)}"` : ""}
         aria-selected="${tab.id === firstTabId || (!firstTabId && index === 0) ? "true" : "false"}"
       ><span>${escapeHtml(tab.label)}</span>${
         tab.badge
@@ -668,7 +671,7 @@ export function renderAdminShell(props: AdminShellProps): string {
         .map(
           (item) => `<a
             href="${escapeHtml(item.href)}"
-            class="sidebar-link"
+            class="sidebar-link${item.active ? " active" : ""}"
             data-nav-item
             data-search="${escapeHtml(
               `${item.label} ${(item.keywords ?? []).join(" ")}`.toLowerCase()
@@ -1263,7 +1266,10 @@ ${renderBaseStyleBlock()}
 
         const setActiveNav = (targetId) => {
           navItems.forEach((item) => {
-            const href = item.getAttribute("href");
+            const href = item.getAttribute("href") ?? "";
+            if (!href.startsWith("#")) {
+              return;
+            }
             item.classList.toggle("active", href === "#" + targetId);
           });
         };
@@ -1368,6 +1374,12 @@ ${renderBaseStyleBlock()}
 
           buttons.forEach((button) => {
             button.addEventListener("click", () => {
+              const href = button.getAttribute("data-tab-href");
+              if (href) {
+                window.location.assign(href);
+                return;
+              }
+
               const targetId = button.getAttribute("data-tab-target");
               if (targetId) {
                 activateTab(root, targetId, true);

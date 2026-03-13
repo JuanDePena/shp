@@ -46,6 +46,26 @@ const sessionCookieName = "shp_session";
 const localeCookieName = "shp_lang";
 
 type WebLocale = "en" | "es";
+type DashboardView =
+  | "overview"
+  | "context"
+  | "node-health"
+  | "resource-drift"
+  | "job-history"
+  | "backups"
+  | "desired-state";
+
+const desiredStateTabIds = [
+  "desired-state-create",
+  "desired-state-tenants",
+  "desired-state-nodes",
+  "desired-state-zones",
+  "desired-state-apps",
+  "desired-state-databases",
+  "desired-state-backups"
+] as const;
+
+type DesiredStateTabId = (typeof desiredStateTabIds)[number];
 
 interface DashboardData {
   currentUser: AuthenticatedUserSummary;
@@ -56,6 +76,11 @@ interface DashboardData {
   nodeHealth: NodeHealthSnapshot[];
   jobHistory: JobHistoryEntry[];
   backups: BackupsOverview;
+}
+
+interface SelectOption {
+  value: string;
+  label: string;
 }
 
 interface WebCopy {
@@ -522,6 +547,81 @@ function sanitizeReturnTo(value: string | null | undefined): string {
   return value;
 }
 
+function normalizeDashboardView(value: string | null | undefined): DashboardView {
+  switch (value) {
+    case "context":
+    case "node-health":
+    case "resource-drift":
+    case "job-history":
+    case "backups":
+    case "desired-state":
+      return value;
+    default:
+      return "overview";
+  }
+}
+
+function normalizeDesiredStateTab(value: string | null | undefined): DesiredStateTabId {
+  return desiredStateTabIds.find((candidate) => candidate === value) ?? "desired-state-create";
+}
+
+function buildDashboardViewUrl(
+  view: DashboardView,
+  tab?: DesiredStateTabId
+): string {
+  const search = new URLSearchParams();
+
+  if (view !== "overview") {
+    search.set("view", view);
+  }
+
+  if (view === "desired-state") {
+    search.set("tab", tab ?? "desired-state-create");
+  }
+
+  const query = search.toString();
+  return query.length > 0 ? `/?${query}` : "/";
+}
+
+function getDashboardHeading(copy: WebCopy, view: DashboardView): string {
+  switch (view) {
+    case "context":
+      return copy.navContext;
+    case "node-health":
+      return copy.nodeHealthTitle;
+    case "resource-drift":
+      return copy.resourceDriftTitle;
+    case "job-history":
+      return copy.jobHistoryTitle;
+    case "backups":
+      return copy.backupsTitle;
+    case "desired-state":
+      return copy.desiredStateTitle;
+    case "overview":
+    default:
+      return copy.dashboardHeading;
+  }
+}
+
+function getDashboardSubheading(copy: WebCopy, view: DashboardView): string {
+  switch (view) {
+    case "node-health":
+      return copy.nodeHealthDescription;
+    case "resource-drift":
+      return copy.resourceDriftDescription;
+    case "job-history":
+      return copy.jobHistoryDescription;
+    case "backups":
+      return copy.backupsDescription;
+    case "desired-state":
+      return copy.desiredStateDescription;
+    case "context":
+    case "overview":
+    default:
+      return copy.dashboardSubheading;
+  }
+}
+
 async function apiRequest<T>(
   pathname: string,
   options: {
@@ -607,6 +707,48 @@ function interpolateCopy(
   }
 
   return next;
+}
+
+function renderSelectOptions(
+  options: SelectOption[],
+  selectedValue: string | undefined,
+  optionsConfig: {
+    allowBlank?: boolean;
+    blankLabel?: string;
+  } = {}
+): string {
+  const rendered: string[] = [];
+  const seen = new Set<string>();
+
+  if (optionsConfig.allowBlank) {
+    const blankValue = selectedValue ?? "";
+    rendered.push(
+      `<option value=""${blankValue.length === 0 ? " selected" : ""}>${escapeHtml(
+        optionsConfig.blankLabel ?? "-"
+      )}</option>`
+    );
+  }
+
+  for (const option of options) {
+    if (seen.has(option.value)) {
+      continue;
+    }
+
+    seen.add(option.value);
+    rendered.push(
+      `<option value="${escapeHtml(option.value)}"${
+        option.value === selectedValue ? " selected" : ""
+      }>${escapeHtml(option.label)}</option>`
+    );
+  }
+
+  if (selectedValue && !seen.has(selectedValue)) {
+    rendered.push(
+      `<option value="${escapeHtml(selectedValue)}" selected>${escapeHtml(selectedValue)}</option>`
+    );
+  }
+
+  return rendered.join("");
 }
 
 function parseCommaSeparated(value: string): string[] {
@@ -763,7 +905,27 @@ function renderLoginPage(locale: WebLocale, notice?: PanelNotice): string {
   });
 }
 
-function renderDesiredStateSection(data: DashboardData, copy: WebCopy): string {
+function renderDesiredStateSection(
+  data: DashboardData,
+  copy: WebCopy,
+  defaultTabId: DesiredStateTabId
+): string {
+  const tenantOptions = data.desiredState.spec.tenants.map((tenant) => ({
+    value: tenant.slug,
+    label: `${tenant.slug} · ${tenant.displayName}`
+  }));
+  const nodeOptions = data.desiredState.spec.nodes.map((node) => ({
+    value: node.nodeId,
+    label: `${node.nodeId} · ${node.hostname}`
+  }));
+  const zoneOptions = data.desiredState.spec.zones.map((zone) => ({
+    value: zone.zoneName,
+    label: zone.zoneName
+  }));
+  const appOptions = data.desiredState.spec.apps.map((app) => ({
+    value: app.slug,
+    label: `${app.slug} · ${app.canonicalDomain}`
+  }));
   const tenantRows = data.desiredState.spec.tenants
     .map(
       (tenant) => `<details>
@@ -827,10 +989,14 @@ function renderDesiredStateSection(data: DashboardData, copy: WebCopy): string {
               <input name="zoneName" value="${escapeHtml(zone.zoneName)}" required />
             </label>
             <label>Tenant slug
-              <input name="tenantSlug" value="${escapeHtml(zone.tenantSlug)}" required />
+              <select name="tenantSlug" required>
+                ${renderSelectOptions(tenantOptions, zone.tenantSlug)}
+              </select>
             </label>
             <label>Primary node
-              <input name="primaryNodeId" value="${escapeHtml(zone.primaryNodeId)}" required />
+              <select name="primaryNodeId" required>
+                ${renderSelectOptions(nodeOptions, zone.primaryNodeId)}
+              </select>
             </label>
           </div>
           <label>Records
@@ -859,16 +1025,27 @@ function renderDesiredStateSection(data: DashboardData, copy: WebCopy): string {
               <input name="slug" value="${escapeHtml(app.slug)}" required />
             </label>
             <label>Tenant slug
-              <input name="tenantSlug" value="${escapeHtml(app.tenantSlug)}" required />
+              <select name="tenantSlug" required>
+                ${renderSelectOptions(tenantOptions, app.tenantSlug)}
+              </select>
             </label>
             <label>Zone name
-              <input name="zoneName" value="${escapeHtml(app.zoneName)}" required />
+              <select name="zoneName" required>
+                ${renderSelectOptions(zoneOptions, app.zoneName)}
+              </select>
             </label>
             <label>Primary node
-              <input name="primaryNodeId" value="${escapeHtml(app.primaryNodeId)}" required />
+              <select name="primaryNodeId" required>
+                ${renderSelectOptions(nodeOptions, app.primaryNodeId)}
+              </select>
             </label>
             <label>Standby node
-              <input name="standbyNodeId" value="${escapeHtml(app.standbyNodeId ?? "")}" />
+              <select name="standbyNodeId">
+                ${renderSelectOptions(nodeOptions, app.standbyNodeId, {
+                  allowBlank: true,
+                  blankLabel: "none"
+                })}
+              </select>
             </label>
             <label>Canonical domain
               <input name="canonicalDomain" value="${escapeHtml(app.canonicalDomain)}" required />
@@ -886,7 +1063,10 @@ function renderDesiredStateSection(data: DashboardData, copy: WebCopy): string {
               <input name="storageRoot" value="${escapeHtml(app.storageRoot)}" required />
             </label>
             <label>Mode
-              <input name="mode" value="${escapeHtml(app.mode)}" required />
+              <select name="mode">
+                <option value="active-passive"${app.mode === "active-passive" ? " selected" : ""}>active-passive</option>
+                <option value="active-active"${app.mode === "active-active" ? " selected" : ""}>active-active</option>
+              </select>
             </label>
           </div>
           <div class="toolbar">
@@ -910,7 +1090,9 @@ function renderDesiredStateSection(data: DashboardData, copy: WebCopy): string {
           <input type="hidden" name="originalAppSlug" value="${escapeHtml(database.appSlug)}" />
           <div class="form-grid">
             <label>App slug
-              <input name="appSlug" value="${escapeHtml(database.appSlug)}" required />
+              <select name="appSlug" required>
+                ${renderSelectOptions(appOptions, database.appSlug)}
+              </select>
             </label>
             <label>Engine
               <select name="engine">
@@ -925,10 +1107,17 @@ function renderDesiredStateSection(data: DashboardData, copy: WebCopy): string {
               <input name="databaseUser" value="${escapeHtml(database.databaseUser)}" required />
             </label>
             <label>Primary node
-              <input name="primaryNodeId" value="${escapeHtml(database.primaryNodeId)}" required />
+              <select name="primaryNodeId" required>
+                ${renderSelectOptions(nodeOptions, database.primaryNodeId)}
+              </select>
             </label>
             <label>Standby node
-              <input name="standbyNodeId" value="${escapeHtml(database.standbyNodeId ?? "")}" />
+              <select name="standbyNodeId">
+                ${renderSelectOptions(nodeOptions, database.standbyNodeId, {
+                  allowBlank: true,
+                  blankLabel: "none"
+                })}
+              </select>
             </label>
             <label>Pending migration target
               <input name="pendingMigrationTo" value="${escapeHtml(database.pendingMigrationTo ?? "")}" />
@@ -958,10 +1147,14 @@ function renderDesiredStateSection(data: DashboardData, copy: WebCopy): string {
               <input name="policySlug" value="${escapeHtml(policy.policySlug)}" required />
             </label>
             <label>Tenant slug
-              <input name="tenantSlug" value="${escapeHtml(policy.tenantSlug)}" required />
+              <select name="tenantSlug" required>
+                ${renderSelectOptions(tenantOptions, policy.tenantSlug)}
+              </select>
             </label>
             <label>Target node
-              <input name="targetNodeId" value="${escapeHtml(policy.targetNodeId)}" required />
+              <select name="targetNodeId" required>
+                ${renderSelectOptions(nodeOptions, policy.targetNodeId)}
+              </select>
             </label>
             <label>Schedule
               <input name="schedule" value="${escapeHtml(policy.schedule)}" required />
@@ -1028,10 +1221,14 @@ function renderDesiredStateSection(data: DashboardData, copy: WebCopy): string {
               <input name="zoneName" required />
             </label>
             <label>Tenant slug
-              <input name="tenantSlug" required />
+              <select name="tenantSlug" required>
+                ${renderSelectOptions(tenantOptions, undefined)}
+              </select>
             </label>
             <label>Primary node
-              <input name="primaryNodeId" required />
+              <select name="primaryNodeId" required>
+                ${renderSelectOptions(nodeOptions, undefined)}
+              </select>
             </label>
           </div>
           <label>Records
@@ -1048,16 +1245,27 @@ function renderDesiredStateSection(data: DashboardData, copy: WebCopy): string {
               <input name="slug" required />
             </label>
             <label>Tenant slug
-              <input name="tenantSlug" required />
+              <select name="tenantSlug" required>
+                ${renderSelectOptions(tenantOptions, undefined)}
+              </select>
             </label>
             <label>Zone name
-              <input name="zoneName" required />
+              <select name="zoneName" required>
+                ${renderSelectOptions(zoneOptions, undefined)}
+              </select>
             </label>
             <label>Primary node
-              <input name="primaryNodeId" required />
+              <select name="primaryNodeId" required>
+                ${renderSelectOptions(nodeOptions, undefined)}
+              </select>
             </label>
             <label>Standby node
-              <input name="standbyNodeId" />
+              <select name="standbyNodeId">
+                ${renderSelectOptions(nodeOptions, undefined, {
+                  allowBlank: true,
+                  blankLabel: "none"
+                })}
+              </select>
             </label>
             <label>Canonical domain
               <input name="canonicalDomain" required />
@@ -1075,7 +1283,10 @@ function renderDesiredStateSection(data: DashboardData, copy: WebCopy): string {
               <input name="storageRoot" required />
             </label>
             <label>Mode
-              <input name="mode" value="active-passive" required />
+              <select name="mode">
+                <option value="active-passive" selected>active-passive</option>
+                <option value="active-active">active-active</option>
+              </select>
             </label>
           </div>
           <button type="submit">Create app</button>
@@ -1086,7 +1297,9 @@ function renderDesiredStateSection(data: DashboardData, copy: WebCopy): string {
         <form method="post" action="/resources/databases/upsert" class="stack">
           <div class="form-grid">
             <label>App slug
-              <input name="appSlug" required />
+              <select name="appSlug" required>
+                ${renderSelectOptions(appOptions, undefined)}
+              </select>
             </label>
             <label>Engine
               <select name="engine">
@@ -1101,10 +1314,17 @@ function renderDesiredStateSection(data: DashboardData, copy: WebCopy): string {
               <input name="databaseUser" required />
             </label>
             <label>Primary node
-              <input name="primaryNodeId" required />
+              <select name="primaryNodeId" required>
+                ${renderSelectOptions(nodeOptions, undefined)}
+              </select>
             </label>
             <label>Standby node
-              <input name="standbyNodeId" />
+              <select name="standbyNodeId">
+                ${renderSelectOptions(nodeOptions, undefined, {
+                  allowBlank: true,
+                  blankLabel: "none"
+                })}
+              </select>
             </label>
             <label>Pending migration target
               <input name="pendingMigrationTo" />
@@ -1124,10 +1344,14 @@ function renderDesiredStateSection(data: DashboardData, copy: WebCopy): string {
               <input name="policySlug" required />
             </label>
             <label>Tenant slug
-              <input name="tenantSlug" required />
+              <select name="tenantSlug" required>
+                ${renderSelectOptions(tenantOptions, undefined)}
+              </select>
             </label>
             <label>Target node
-              <input name="targetNodeId" required />
+              <select name="targetNodeId" required>
+                ${renderSelectOptions(nodeOptions, undefined)}
+              </select>
             </label>
             <label>Schedule
               <input name="schedule" placeholder="0 */6 * * *" required />
@@ -1152,42 +1376,49 @@ function renderDesiredStateSection(data: DashboardData, copy: WebCopy): string {
       id: "desired-state-create",
       label: copy.tabCreate,
       badge: "+",
+      href: buildDashboardViewUrl("desired-state", "desired-state-create"),
       panelHtml: createPanelHtml
     },
     {
       id: "desired-state-tenants",
       label: copy.tabTenants,
       badge: String(data.desiredState.spec.tenants.length),
+      href: buildDashboardViewUrl("desired-state", "desired-state-tenants"),
       panelHtml: `<article class="panel"><h3>Tenants</h3>${tenantRows || '<p class="empty">No tenants.</p>'}</article>`
     },
     {
       id: "desired-state-nodes",
       label: copy.tabNodes,
       badge: String(data.desiredState.spec.nodes.length),
+      href: buildDashboardViewUrl("desired-state", "desired-state-nodes"),
       panelHtml: `<article class="panel"><h3>Nodes</h3>${nodeRows || '<p class="empty">No nodes.</p>'}</article>`
     },
     {
       id: "desired-state-zones",
       label: copy.tabZones,
       badge: String(data.desiredState.spec.zones.length),
+      href: buildDashboardViewUrl("desired-state", "desired-state-zones"),
       panelHtml: `<article class="panel"><h3>Zones</h3>${zoneRows || '<p class="empty">No zones.</p>'}</article>`
     },
     {
       id: "desired-state-apps",
       label: copy.tabApps,
       badge: String(data.desiredState.spec.apps.length),
+      href: buildDashboardViewUrl("desired-state", "desired-state-apps"),
       panelHtml: `<article class="panel"><h3>Apps</h3>${appRows || '<p class="empty">No apps.</p>'}</article>`
     },
     {
       id: "desired-state-databases",
       label: copy.tabDatabases,
       badge: String(data.desiredState.spec.databases.length),
+      href: buildDashboardViewUrl("desired-state", "desired-state-databases"),
       panelHtml: `<article class="panel"><h3>Databases</h3>${databaseRows || '<p class="empty">No databases.</p>'}</article>`
     },
     {
       id: "desired-state-backups",
       label: copy.tabBackupPolicies,
       badge: String(data.desiredState.spec.backupPolicies.length),
+      href: buildDashboardViewUrl("desired-state", "desired-state-backups"),
       panelHtml: `<article class="panel"><h3>Backup policies</h3>${backupRows || '<p class="empty">No backup policies.</p>'}</article>`
     }
   ];
@@ -1202,7 +1433,7 @@ function renderDesiredStateSection(data: DashboardData, copy: WebCopy): string {
     ${renderTabs({
       id: "desired-state-tabs",
       tabs,
-      defaultTabId: "desired-state-create"
+      defaultTabId
     })}
   </section>`;
 }
@@ -1211,6 +1442,8 @@ function renderDashboard(
   data: DashboardData,
   locale: WebLocale,
   currentPath: string,
+  view: DashboardView,
+  desiredStateTab: DesiredStateTabId,
   notice?: PanelNotice
 ): string {
   const copy = copyByLocale[locale];
@@ -1446,14 +1679,16 @@ function renderDashboard(
         {
           id: "overview",
           label: copy.navOverview,
-          href: "#section-overview",
-          keywords: [copy.overviewTitle, copy.managedNodes, copy.pendingJobs]
+          href: buildDashboardViewUrl("overview"),
+          keywords: [copy.overviewTitle, copy.managedNodes, copy.pendingJobs],
+          active: view === "overview"
         },
         {
           id: "context",
           label: copy.navContext,
-          href: "#section-context",
-          keywords: [copy.usersAndScope, copy.inventoryImport, copy.latestReconciliation]
+          href: buildDashboardViewUrl("context"),
+          keywords: [copy.usersAndScope, copy.inventoryImport, copy.latestReconciliation],
+          active: view === "context"
         }
       ]
     },
@@ -1464,26 +1699,30 @@ function renderDashboard(
         {
           id: "node-health",
           label: copy.navNodeHealth,
-          href: "#section-node-health",
-          badge: String(data.nodeHealth.length)
+          href: buildDashboardViewUrl("node-health"),
+          badge: String(data.nodeHealth.length),
+          active: view === "node-health"
         },
         {
           id: "resource-drift",
           label: copy.navDrift,
-          href: "#section-resource-drift",
-          badge: String(data.overview.driftedResourceCount)
+          href: buildDashboardViewUrl("resource-drift"),
+          badge: String(data.overview.driftedResourceCount),
+          active: view === "resource-drift"
         },
         {
           id: "job-history",
           label: copy.navJobs,
-          href: "#section-job-history",
-          badge: String(data.jobHistory.length)
+          href: buildDashboardViewUrl("job-history"),
+          badge: String(data.jobHistory.length),
+          active: view === "job-history"
         },
         {
           id: "backups",
           label: copy.navBackups,
-          href: "#section-backups",
-          badge: String(data.backups.latestRuns.length)
+          href: buildDashboardViewUrl("backups"),
+          badge: String(data.backups.latestRuns.length),
+          active: view === "backups"
         }
       ]
     },
@@ -1491,159 +1730,194 @@ function renderDashboard(
       id: "desired-state",
       label: copy.navResources,
       items: [
-        { id: "create", label: copy.navCreate, href: "#desired-state-create" },
+        {
+          id: "create",
+          label: copy.navCreate,
+          href: buildDashboardViewUrl("desired-state", "desired-state-create"),
+          active: view === "desired-state" && desiredStateTab === "desired-state-create"
+        },
         {
           id: "tenants",
           label: copy.navTenants,
-          href: "#desired-state-tenants",
-          badge: String(data.desiredState.spec.tenants.length)
+          href: buildDashboardViewUrl("desired-state", "desired-state-tenants"),
+          badge: String(data.desiredState.spec.tenants.length),
+          active: view === "desired-state" && desiredStateTab === "desired-state-tenants"
         },
         {
           id: "nodes",
           label: copy.navNodes,
-          href: "#desired-state-nodes",
-          badge: String(data.desiredState.spec.nodes.length)
+          href: buildDashboardViewUrl("desired-state", "desired-state-nodes"),
+          badge: String(data.desiredState.spec.nodes.length),
+          active: view === "desired-state" && desiredStateTab === "desired-state-nodes"
         },
         {
           id: "zones",
           label: copy.navZones,
-          href: "#desired-state-zones",
-          badge: String(data.desiredState.spec.zones.length)
+          href: buildDashboardViewUrl("desired-state", "desired-state-zones"),
+          badge: String(data.desiredState.spec.zones.length),
+          active: view === "desired-state" && desiredStateTab === "desired-state-zones"
         },
         {
           id: "apps",
           label: copy.navApps,
-          href: "#desired-state-apps",
-          badge: String(data.desiredState.spec.apps.length)
+          href: buildDashboardViewUrl("desired-state", "desired-state-apps"),
+          badge: String(data.desiredState.spec.apps.length),
+          active: view === "desired-state" && desiredStateTab === "desired-state-apps"
         },
         {
           id: "databases",
           label: copy.navDatabases,
-          href: "#desired-state-databases",
-          badge: String(data.desiredState.spec.databases.length)
+          href: buildDashboardViewUrl("desired-state", "desired-state-databases"),
+          badge: String(data.desiredState.spec.databases.length),
+          active: view === "desired-state" && desiredStateTab === "desired-state-databases"
         },
         {
           id: "backup-policies",
           label: copy.navBackupPolicies,
-          href: "#desired-state-backups",
-          badge: String(data.desiredState.spec.backupPolicies.length)
+          href: buildDashboardViewUrl("desired-state", "desired-state-backups"),
+          badge: String(data.desiredState.spec.backupPolicies.length),
+          active: view === "desired-state" && desiredStateTab === "desired-state-backups"
         }
       ]
     }
   ];
 
+  const overviewSection = `<section id="section-overview" class="panel section-panel">
+    <div class="section-head">
+      <div>
+        <h2>${escapeHtml(copy.overviewTitle)}</h2>
+        <p class="muted section-description">${escapeHtml(copy.overviewDescription)}</p>
+      </div>
+    </div>
+    ${renderStats(data.overview, copy, locale)}
+    ${actionBar}
+  </section>`;
+
+  const nodeHealthSection = renderDataTable({
+    id: "section-node-health",
+    heading: copy.nodeHealthTitle,
+    description: copy.nodeHealthDescription,
+    columns: [
+      { label: copy.nodeColNode, className: "mono" },
+      { label: copy.nodeColHostname },
+      { label: copy.nodeColVersion },
+      { label: copy.nodeColPending },
+      { label: copy.nodeColLatestStatus },
+      { label: copy.nodeColLatestSummary },
+      { label: copy.nodeColLastSeen }
+    ],
+    rows: nodeHealthRows,
+    emptyMessage: copy.noNodes,
+    filterPlaceholder: copy.dataFilterPlaceholder,
+    rowsPerPageLabel: copy.rowsPerPage,
+    showingLabel: copy.showing,
+    ofLabel: copy.of,
+    recordsLabel: copy.records,
+    defaultPageSize: 10
+  });
+
+  const resourceDriftSection = renderDataTable({
+    id: "section-resource-drift",
+    heading: copy.resourceDriftTitle,
+    description: copy.resourceDriftDescription,
+    columns: [
+      { label: copy.driftColKind },
+      { label: copy.driftColResource, className: "mono" },
+      { label: copy.driftColNode, className: "mono" },
+      { label: copy.driftColDrift },
+      { label: copy.driftColLatestStatus },
+      { label: copy.driftColSummary }
+    ],
+    rows: driftRows,
+    emptyMessage: copy.noDrift,
+    filterPlaceholder: copy.dataFilterPlaceholder,
+    rowsPerPageLabel: copy.rowsPerPage,
+    showingLabel: copy.showing,
+    ofLabel: copy.of,
+    recordsLabel: copy.records,
+    defaultPageSize: 10
+  });
+
+  const jobHistorySection = renderDataTable({
+    id: "section-job-history",
+    heading: copy.jobHistoryTitle,
+    description: copy.jobHistoryDescription,
+    columns: [
+      { label: copy.jobColJob, className: "mono" },
+      { label: copy.jobColKind },
+      { label: copy.jobColNode, className: "mono" },
+      { label: copy.jobColStatus },
+      { label: copy.jobColReason },
+      { label: copy.jobColSummary },
+      { label: copy.jobColCreated }
+    ],
+    rows: jobRows,
+    emptyMessage: copy.noJobs,
+    filterPlaceholder: copy.dataFilterPlaceholder,
+    rowsPerPageLabel: copy.rowsPerPage,
+    showingLabel: copy.showing,
+    ofLabel: copy.of,
+    recordsLabel: copy.records,
+    defaultPageSize: 10
+  });
+
+  const backupsSection = renderDataTable({
+    id: "section-backups",
+    heading: copy.backupsTitle,
+    description: copy.backupsDescription,
+    columns: [
+      { label: copy.backupColPolicy, className: "mono" },
+      { label: copy.backupColNode, className: "mono" },
+      { label: copy.backupColStatus },
+      { label: copy.backupColSummary },
+      { label: copy.backupColStarted }
+    ],
+    rows: backupRows,
+    emptyMessage: copy.noBackups,
+    filterPlaceholder: copy.dataFilterPlaceholder,
+    rowsPerPageLabel: copy.rowsPerPage,
+    showingLabel: copy.showing,
+    ofLabel: copy.of,
+    recordsLabel: copy.records,
+    defaultPageSize: 10
+  });
+
+  const desiredStateSection = renderDesiredStateSection(data, copy, desiredStateTab);
+
+  const body = (() => {
+    switch (view) {
+      case "context":
+        return contextSection;
+      case "node-health":
+        return nodeHealthSection;
+      case "resource-drift":
+        return resourceDriftSection;
+      case "job-history":
+        return jobHistorySection;
+      case "backups":
+        return backupsSection;
+      case "desired-state":
+        return desiredStateSection;
+      case "overview":
+      default:
+        return overviewSection;
+    }
+  })();
+
   return renderAdminShell({
     lang: locale,
-    title: copy.appName,
+    title: `${copy.appName} · ${getDashboardHeading(copy, view)}`,
     appName: copy.appName,
-    heading: copy.dashboardHeading,
+    heading: getDashboardHeading(copy, view),
     eyebrow: copy.eyebrow,
-    subheading: copy.dashboardSubheading,
+    subheading: getDashboardSubheading(copy, view),
     notice,
     topbarHtml,
     versionLabel: copy.versionLabel,
     versionValue: config.version,
     sidebarSearchPlaceholder: copy.sidebarSearchPlaceholder,
     sidebarGroups,
-    body: [
-      `<section id="section-overview" class="panel section-panel">
-        <div class="section-head">
-          <div>
-            <h2>${escapeHtml(copy.overviewTitle)}</h2>
-            <p class="muted section-description">${escapeHtml(copy.overviewDescription)}</p>
-          </div>
-        </div>
-        ${renderStats(data.overview, copy, locale)}
-        ${actionBar}
-      </section>`,
-      contextSection,
-      renderDataTable({
-        id: "section-node-health",
-        heading: copy.nodeHealthTitle,
-        description: copy.nodeHealthDescription,
-        columns: [
-          { label: copy.nodeColNode, className: "mono" },
-          { label: copy.nodeColHostname },
-          { label: copy.nodeColVersion },
-          { label: copy.nodeColPending },
-          { label: copy.nodeColLatestStatus },
-          { label: copy.nodeColLatestSummary },
-          { label: copy.nodeColLastSeen }
-        ],
-        rows: nodeHealthRows,
-        emptyMessage: copy.noNodes,
-        filterPlaceholder: copy.dataFilterPlaceholder,
-        rowsPerPageLabel: copy.rowsPerPage,
-        showingLabel: copy.showing,
-        ofLabel: copy.of,
-        recordsLabel: copy.records,
-        defaultPageSize: 10
-      }),
-      renderDataTable({
-        id: "section-resource-drift",
-        heading: copy.resourceDriftTitle,
-        description: copy.resourceDriftDescription,
-        columns: [
-          { label: copy.driftColKind },
-          { label: copy.driftColResource, className: "mono" },
-          { label: copy.driftColNode, className: "mono" },
-          { label: copy.driftColDrift },
-          { label: copy.driftColLatestStatus },
-          { label: copy.driftColSummary }
-        ],
-        rows: driftRows,
-        emptyMessage: copy.noDrift,
-        filterPlaceholder: copy.dataFilterPlaceholder,
-        rowsPerPageLabel: copy.rowsPerPage,
-        showingLabel: copy.showing,
-        ofLabel: copy.of,
-        recordsLabel: copy.records,
-        defaultPageSize: 10
-      }),
-      renderDataTable({
-        id: "section-job-history",
-        heading: copy.jobHistoryTitle,
-        description: copy.jobHistoryDescription,
-        columns: [
-          { label: copy.jobColJob, className: "mono" },
-          { label: copy.jobColKind },
-          { label: copy.jobColNode, className: "mono" },
-          { label: copy.jobColStatus },
-          { label: copy.jobColReason },
-          { label: copy.jobColSummary },
-          { label: copy.jobColCreated }
-        ],
-        rows: jobRows,
-        emptyMessage: copy.noJobs,
-        filterPlaceholder: copy.dataFilterPlaceholder,
-        rowsPerPageLabel: copy.rowsPerPage,
-        showingLabel: copy.showing,
-        ofLabel: copy.of,
-        recordsLabel: copy.records,
-        defaultPageSize: 10
-      }),
-      renderDataTable({
-        id: "section-backups",
-        heading: copy.backupsTitle,
-        description: copy.backupsDescription,
-        columns: [
-          { label: copy.backupColPolicy, className: "mono" },
-          { label: copy.backupColNode, className: "mono" },
-          { label: copy.backupColStatus },
-          { label: copy.backupColSummary },
-          { label: copy.backupColStarted }
-        ],
-        rows: backupRows,
-        emptyMessage: copy.noBackups,
-        filterPlaceholder: copy.dataFilterPlaceholder,
-        rowsPerPageLabel: copy.rowsPerPage,
-        showingLabel: copy.showing,
-        ofLabel: copy.of,
-        recordsLabel: copy.records,
-        defaultPageSize: 10
-      }),
-      renderDesiredStateSection(data, copy)
-    ].join("")
+    body
   });
 }
 
@@ -1833,6 +2107,8 @@ async function handleDashboard(request: IncomingMessage, response: ServerRespons
   const token = readSessionToken(request);
   const url = new URL(request.url ?? "/", "http://127.0.0.1");
   const locale = readLocale(request);
+  const view = normalizeDashboardView(url.searchParams.get("view"));
+  const desiredStateTab = normalizeDesiredStateTab(url.searchParams.get("tab"));
 
   if (!token) {
     writeHtml(response, 200, renderLoginPage(locale, getNoticeFromUrl(url)));
@@ -1844,7 +2120,14 @@ async function handleDashboard(request: IncomingMessage, response: ServerRespons
     writeHtml(
       response,
       200,
-      renderDashboard(data, locale, sanitizeReturnTo(`${url.pathname}${url.search}`), getNoticeFromUrl(url))
+      renderDashboard(
+        data,
+        locale,
+        sanitizeReturnTo(`${url.pathname}${url.search}`),
+        view,
+        desiredStateTab,
+        getNoticeFromUrl(url)
+      )
     );
   } catch (error) {
     if (error instanceof WebApiError && error.statusCode === 401) {

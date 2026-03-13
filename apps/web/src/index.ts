@@ -151,18 +151,46 @@ interface WebCopy {
   backupsDescription: string;
   desiredStateTitle: string;
   desiredStateDescription: string;
+  desiredStateInventoryTitle: string;
+  desiredStateInventoryDescription: string;
+  desiredStateEditorsTitle: string;
+  desiredStateEditorsDescription: string;
   dataFilterPlaceholder: string;
   rowsPerPage: string;
   showing: string;
   of: string;
   records: string;
+  tenantColSlug: string;
+  tenantColDisplayName: string;
   nodeColNode: string;
   nodeColHostname: string;
+  nodeSpecColPublicIpv4: string;
+  nodeSpecColWireguard: string;
   nodeColVersion: string;
   nodeColPending: string;
   nodeColLatestStatus: string;
   nodeColLatestSummary: string;
   nodeColLastSeen: string;
+  zoneColZone: string;
+  zoneColTenant: string;
+  zoneColPrimaryNode: string;
+  zoneColRecordCount: string;
+  appColSlug: string;
+  appColTenant: string;
+  appColDomain: string;
+  appColMode: string;
+  appColNodes: string;
+  databaseColApp: string;
+  databaseColEngine: string;
+  databaseColDatabase: string;
+  databaseColUser: string;
+  databaseColNodes: string;
+  databaseColMigration: string;
+  backupPolicyColSlug: string;
+  backupPolicyColTenant: string;
+  backupPolicyColTargetNode: string;
+  backupPolicyColSchedule: string;
+  backupPolicyColRetention: string;
   driftColKind: string;
   driftColResource: string;
   driftColNode: string;
@@ -181,7 +209,12 @@ interface WebCopy {
   backupColStatus: string;
   backupColSummary: string;
   backupColStarted: string;
+  noTenants: string;
   noNodes: string;
+  noZones: string;
+  noApps: string;
+  noDatabases: string;
+  noBackupPolicies: string;
   noDrift: string;
   noJobs: string;
   noBackups: string;
@@ -263,18 +296,46 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     backupsDescription: "Latest runs and current backup policy coverage.",
     desiredStateTitle: "Desired state",
     desiredStateDescription: "PostgreSQL is the source of truth. Use tabs to create and manage platform resources.",
+    desiredStateInventoryTitle: "Current inventory",
+    desiredStateInventoryDescription: "Read the current desired-state catalog before editing individual records.",
+    desiredStateEditorsTitle: "Configuration editors",
+    desiredStateEditorsDescription: "Apply changes through the product forms below. Each save writes back to PostgreSQL desired state.",
     dataFilterPlaceholder: "Filter records",
     rowsPerPage: "Rows per page",
     showing: "Showing",
     of: "of",
     records: "records",
+    tenantColSlug: "Slug",
+    tenantColDisplayName: "Display name",
     nodeColNode: "Node",
     nodeColHostname: "Hostname",
+    nodeSpecColPublicIpv4: "Public IPv4",
+    nodeSpecColWireguard: "WireGuard",
     nodeColVersion: "Version",
     nodeColPending: "Pending",
     nodeColLatestStatus: "Latest status",
     nodeColLatestSummary: "Latest summary",
     nodeColLastSeen: "Last seen",
+    zoneColZone: "Zone",
+    zoneColTenant: "Tenant",
+    zoneColPrimaryNode: "Primary node",
+    zoneColRecordCount: "Records",
+    appColSlug: "App",
+    appColTenant: "Tenant",
+    appColDomain: "Domain",
+    appColMode: "Mode",
+    appColNodes: "Nodes",
+    databaseColApp: "App",
+    databaseColEngine: "Engine",
+    databaseColDatabase: "Database",
+    databaseColUser: "User",
+    databaseColNodes: "Nodes",
+    databaseColMigration: "Migration",
+    backupPolicyColSlug: "Policy",
+    backupPolicyColTenant: "Tenant",
+    backupPolicyColTargetNode: "Target node",
+    backupPolicyColSchedule: "Schedule",
+    backupPolicyColRetention: "Retention",
     driftColKind: "Kind",
     driftColResource: "Resource",
     driftColNode: "Node",
@@ -293,7 +354,12 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     backupColStatus: "Status",
     backupColSummary: "Summary",
     backupColStarted: "Started",
+    noTenants: "No tenants.",
     noNodes: "No nodes.",
+    noZones: "No zones.",
+    noApps: "No apps.",
+    noDatabases: "No databases.",
+    noBackupPolicies: "No backup policies.",
     noDrift: "No drift records.",
     noJobs: "No jobs.",
     noBackups: "No backup runs.",
@@ -373,18 +439,46 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     backupsDescription: "Últimas ejecuciones y cobertura actual de políticas.",
     desiredStateTitle: "Estado deseado",
     desiredStateDescription: "PostgreSQL es la fuente de verdad. Usa tabs para crear y gestionar recursos de plataforma.",
+    desiredStateInventoryTitle: "Inventario actual",
+    desiredStateInventoryDescription: "Revisa el catálogo actual del estado deseado antes de editar registros individuales.",
+    desiredStateEditorsTitle: "Editores de configuración",
+    desiredStateEditorsDescription: "Aplica cambios mediante los formularios del producto. Cada guardado vuelve a escribir PostgreSQL como estado deseado.",
     dataFilterPlaceholder: "Filtrar registros",
     rowsPerPage: "Filas por página",
     showing: "Mostrando",
     of: "de",
     records: "registros",
+    tenantColSlug: "Slug",
+    tenantColDisplayName: "Nombre visible",
     nodeColNode: "Nodo",
     nodeColHostname: "Hostname",
+    nodeSpecColPublicIpv4: "IPv4 pública",
+    nodeSpecColWireguard: "WireGuard",
     nodeColVersion: "Versión",
     nodeColPending: "Pendientes",
     nodeColLatestStatus: "Último estado",
     nodeColLatestSummary: "Último resumen",
     nodeColLastSeen: "Última señal",
+    zoneColZone: "Zona",
+    zoneColTenant: "Tenant",
+    zoneColPrimaryNode: "Nodo primario",
+    zoneColRecordCount: "Registros",
+    appColSlug: "App",
+    appColTenant: "Tenant",
+    appColDomain: "Dominio",
+    appColMode: "Modo",
+    appColNodes: "Nodos",
+    databaseColApp: "App",
+    databaseColEngine: "Motor",
+    databaseColDatabase: "Base",
+    databaseColUser: "Usuario",
+    databaseColNodes: "Nodos",
+    databaseColMigration: "Migración",
+    backupPolicyColSlug: "Política",
+    backupPolicyColTenant: "Tenant",
+    backupPolicyColTargetNode: "Nodo destino",
+    backupPolicyColSchedule: "Horario",
+    backupPolicyColRetention: "Retención",
     driftColKind: "Tipo",
     driftColResource: "Recurso",
     driftColNode: "Nodo",
@@ -403,7 +497,12 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     backupColStatus: "Estado",
     backupColSummary: "Resumen",
     backupColStarted: "Inicio",
+    noTenants: "No hay tenants.",
     noNodes: "No hay nodos.",
+    noZones: "No hay zonas.",
+    noApps: "No hay apps.",
+    noDatabases: "No hay bases de datos.",
+    noBackupPolicies: "No hay políticas de backup.",
     noDrift: "No hay registros de drift.",
     noJobs: "No hay jobs.",
     noBackups: "No hay ejecuciones de backup.",
@@ -926,6 +1025,117 @@ function renderDesiredStateSection(
     value: app.slug,
     label: `${app.slug} · ${app.canonicalDomain}`
   }));
+  const renderEditorPanel = (
+    id: string,
+    rowsHtml: string,
+    emptyMessage: string
+  ): string => `<article id="${escapeHtml(id)}" class="panel">
+      <div class="section-head">
+        <div>
+          <h3>${escapeHtml(copy.desiredStateEditorsTitle)}</h3>
+          <p class="muted section-description">${escapeHtml(copy.desiredStateEditorsDescription)}</p>
+        </div>
+      </div>
+      ${rowsHtml || `<p class="empty">${escapeHtml(emptyMessage)}</p>`}
+    </article>`;
+  const tenantTableRows: DataTableRow[] = data.desiredState.spec.tenants.map((tenant) => ({
+    cells: [
+      `<span class="mono">${escapeHtml(tenant.slug)}</span>`,
+      escapeHtml(tenant.displayName)
+    ],
+    searchText: `${tenant.slug} ${tenant.displayName}`.toLowerCase()
+  }));
+  const nodeTableRows: DataTableRow[] = data.desiredState.spec.nodes.map((node) => ({
+    cells: [
+      `<span class="mono">${escapeHtml(node.nodeId)}</span>`,
+      escapeHtml(node.hostname),
+      `<span class="mono">${escapeHtml(node.publicIpv4)}</span>`,
+      `<span class="mono">${escapeHtml(node.wireguardAddress)}</span>`
+    ],
+    searchText: [
+      node.nodeId,
+      node.hostname,
+      node.publicIpv4,
+      node.wireguardAddress
+    ].join(" ").toLowerCase()
+  }));
+  const zoneTableRows: DataTableRow[] = data.desiredState.spec.zones.map((zone) => ({
+    cells: [
+      `<span class="mono">${escapeHtml(zone.zoneName)}</span>`,
+      escapeHtml(zone.tenantSlug),
+      `<span class="mono">${escapeHtml(zone.primaryNodeId)}</span>`,
+      renderPill(String(zone.records.length), zone.records.length > 0 ? "success" : "muted")
+    ],
+    searchText: [
+      zone.zoneName,
+      zone.tenantSlug,
+      zone.primaryNodeId,
+      ...zone.records.map((record) => `${record.name} ${record.type} ${record.value}`)
+    ].join(" ").toLowerCase()
+  }));
+  const appTableRows: DataTableRow[] = data.desiredState.spec.apps.map((app) => ({
+    cells: [
+      `<span class="mono">${escapeHtml(app.slug)}</span>`,
+      escapeHtml(app.tenantSlug),
+      escapeHtml(app.canonicalDomain),
+      renderPill(app.mode, app.mode === "active-active" ? "success" : "muted"),
+      `<span class="mono">${escapeHtml(
+        app.standbyNodeId ? `${app.primaryNodeId} -> ${app.standbyNodeId}` : app.primaryNodeId
+      )}</span>`
+    ],
+    searchText: [
+      app.slug,
+      app.tenantSlug,
+      app.zoneName,
+      app.canonicalDomain,
+      app.aliases.join(" "),
+      app.mode,
+      app.primaryNodeId,
+      app.standbyNodeId ?? ""
+    ].join(" ").toLowerCase()
+  }));
+  const databaseTableRows: DataTableRow[] = data.desiredState.spec.databases.map((database) => ({
+    cells: [
+      `<span class="mono">${escapeHtml(database.appSlug)}</span>`,
+      escapeHtml(database.engine),
+      `<span class="mono">${escapeHtml(database.databaseName)}</span>`,
+      `<span class="mono">${escapeHtml(database.databaseUser)}</span>`,
+      `<span class="mono">${escapeHtml(
+        database.standbyNodeId
+          ? `${database.primaryNodeId} -> ${database.standbyNodeId}`
+          : database.primaryNodeId
+      )}</span>`,
+      database.pendingMigrationTo
+        ? renderPill(database.pendingMigrationTo, "danger")
+        : renderPill(copy.none, "muted")
+    ],
+    searchText: [
+      database.appSlug,
+      database.engine,
+      database.databaseName,
+      database.databaseUser,
+      database.primaryNodeId,
+      database.standbyNodeId ?? "",
+      database.pendingMigrationTo ?? ""
+    ].join(" ").toLowerCase()
+  }));
+  const backupTableRows: DataTableRow[] = data.desiredState.spec.backupPolicies.map((policy) => ({
+    cells: [
+      `<span class="mono">${escapeHtml(policy.policySlug)}</span>`,
+      escapeHtml(policy.tenantSlug),
+      `<span class="mono">${escapeHtml(policy.targetNodeId)}</span>`,
+      `<span class="mono">${escapeHtml(policy.schedule)}</span>`,
+      renderPill(String(policy.retentionDays), policy.retentionDays > 0 ? "success" : "muted")
+    ],
+    searchText: [
+      policy.policySlug,
+      policy.tenantSlug,
+      policy.targetNodeId,
+      policy.schedule,
+      String(policy.retentionDays),
+      policy.resourceSelectors.join(" ")
+    ].join(" ").toLowerCase()
+  }));
   const tenantRows = data.desiredState.spec.tenants
     .map(
       (tenant) => `<details>
@@ -1384,42 +1594,170 @@ function renderDesiredStateSection(
       label: copy.tabTenants,
       badge: String(data.desiredState.spec.tenants.length),
       href: buildDashboardViewUrl("desired-state", "desired-state-tenants"),
-      panelHtml: `<article class="panel"><h3>Tenants</h3>${tenantRows || '<p class="empty">No tenants.</p>'}</article>`
+      panelHtml: `<div class="stack">
+        ${renderDataTable({
+          id: "desired-state-tenants-table",
+          heading: copy.desiredStateInventoryTitle,
+          description: copy.desiredStateInventoryDescription,
+          columns: [
+            { label: copy.tenantColSlug, className: "mono" },
+            { label: copy.tenantColDisplayName }
+          ],
+          rows: tenantTableRows,
+          emptyMessage: copy.noTenants,
+          filterPlaceholder: copy.dataFilterPlaceholder,
+          rowsPerPageLabel: copy.rowsPerPage,
+          showingLabel: copy.showing,
+          ofLabel: copy.of,
+          recordsLabel: copy.records,
+          defaultPageSize: 10
+        })}
+        ${renderEditorPanel("desired-state-tenants-editors", tenantRows, copy.noTenants)}
+      </div>`
     },
     {
       id: "desired-state-nodes",
       label: copy.tabNodes,
       badge: String(data.desiredState.spec.nodes.length),
       href: buildDashboardViewUrl("desired-state", "desired-state-nodes"),
-      panelHtml: `<article class="panel"><h3>Nodes</h3>${nodeRows || '<p class="empty">No nodes.</p>'}</article>`
+      panelHtml: `<div class="stack">
+        ${renderDataTable({
+          id: "desired-state-nodes-table",
+          heading: copy.desiredStateInventoryTitle,
+          description: copy.desiredStateInventoryDescription,
+          columns: [
+            { label: copy.nodeColNode, className: "mono" },
+            { label: copy.nodeColHostname },
+            { label: copy.nodeSpecColPublicIpv4, className: "mono" },
+            { label: copy.nodeSpecColWireguard, className: "mono" }
+          ],
+          rows: nodeTableRows,
+          emptyMessage: copy.noNodes,
+          filterPlaceholder: copy.dataFilterPlaceholder,
+          rowsPerPageLabel: copy.rowsPerPage,
+          showingLabel: copy.showing,
+          ofLabel: copy.of,
+          recordsLabel: copy.records,
+          defaultPageSize: 10
+        })}
+        ${renderEditorPanel("desired-state-nodes-editors", nodeRows, copy.noNodes)}
+      </div>`
     },
     {
       id: "desired-state-zones",
       label: copy.tabZones,
       badge: String(data.desiredState.spec.zones.length),
       href: buildDashboardViewUrl("desired-state", "desired-state-zones"),
-      panelHtml: `<article class="panel"><h3>Zones</h3>${zoneRows || '<p class="empty">No zones.</p>'}</article>`
+      panelHtml: `<div class="stack">
+        ${renderDataTable({
+          id: "desired-state-zones-table",
+          heading: copy.desiredStateInventoryTitle,
+          description: copy.desiredStateInventoryDescription,
+          columns: [
+            { label: copy.zoneColZone, className: "mono" },
+            { label: copy.zoneColTenant },
+            { label: copy.zoneColPrimaryNode, className: "mono" },
+            { label: copy.zoneColRecordCount }
+          ],
+          rows: zoneTableRows,
+          emptyMessage: copy.noZones,
+          filterPlaceholder: copy.dataFilterPlaceholder,
+          rowsPerPageLabel: copy.rowsPerPage,
+          showingLabel: copy.showing,
+          ofLabel: copy.of,
+          recordsLabel: copy.records,
+          defaultPageSize: 10
+        })}
+        ${renderEditorPanel("desired-state-zones-editors", zoneRows, copy.noZones)}
+      </div>`
     },
     {
       id: "desired-state-apps",
       label: copy.tabApps,
       badge: String(data.desiredState.spec.apps.length),
       href: buildDashboardViewUrl("desired-state", "desired-state-apps"),
-      panelHtml: `<article class="panel"><h3>Apps</h3>${appRows || '<p class="empty">No apps.</p>'}</article>`
+      panelHtml: `<div class="stack">
+        ${renderDataTable({
+          id: "desired-state-apps-table",
+          heading: copy.desiredStateInventoryTitle,
+          description: copy.desiredStateInventoryDescription,
+          columns: [
+            { label: copy.appColSlug, className: "mono" },
+            { label: copy.appColTenant },
+            { label: copy.appColDomain },
+            { label: copy.appColMode },
+            { label: copy.appColNodes, className: "mono" }
+          ],
+          rows: appTableRows,
+          emptyMessage: copy.noApps,
+          filterPlaceholder: copy.dataFilterPlaceholder,
+          rowsPerPageLabel: copy.rowsPerPage,
+          showingLabel: copy.showing,
+          ofLabel: copy.of,
+          recordsLabel: copy.records,
+          defaultPageSize: 10
+        })}
+        ${renderEditorPanel("desired-state-apps-editors", appRows, copy.noApps)}
+      </div>`
     },
     {
       id: "desired-state-databases",
       label: copy.tabDatabases,
       badge: String(data.desiredState.spec.databases.length),
       href: buildDashboardViewUrl("desired-state", "desired-state-databases"),
-      panelHtml: `<article class="panel"><h3>Databases</h3>${databaseRows || '<p class="empty">No databases.</p>'}</article>`
+      panelHtml: `<div class="stack">
+        ${renderDataTable({
+          id: "desired-state-databases-table",
+          heading: copy.desiredStateInventoryTitle,
+          description: copy.desiredStateInventoryDescription,
+          columns: [
+            { label: copy.databaseColApp, className: "mono" },
+            { label: copy.databaseColEngine },
+            { label: copy.databaseColDatabase, className: "mono" },
+            { label: copy.databaseColUser, className: "mono" },
+            { label: copy.databaseColNodes, className: "mono" },
+            { label: copy.databaseColMigration }
+          ],
+          rows: databaseTableRows,
+          emptyMessage: copy.noDatabases,
+          filterPlaceholder: copy.dataFilterPlaceholder,
+          rowsPerPageLabel: copy.rowsPerPage,
+          showingLabel: copy.showing,
+          ofLabel: copy.of,
+          recordsLabel: copy.records,
+          defaultPageSize: 10
+        })}
+        ${renderEditorPanel("desired-state-databases-editors", databaseRows, copy.noDatabases)}
+      </div>`
     },
     {
       id: "desired-state-backups",
       label: copy.tabBackupPolicies,
       badge: String(data.desiredState.spec.backupPolicies.length),
       href: buildDashboardViewUrl("desired-state", "desired-state-backups"),
-      panelHtml: `<article class="panel"><h3>Backup policies</h3>${backupRows || '<p class="empty">No backup policies.</p>'}</article>`
+      panelHtml: `<div class="stack">
+        ${renderDataTable({
+          id: "desired-state-backups-table",
+          heading: copy.desiredStateInventoryTitle,
+          description: copy.desiredStateInventoryDescription,
+          columns: [
+            { label: copy.backupPolicyColSlug, className: "mono" },
+            { label: copy.backupPolicyColTenant },
+            { label: copy.backupPolicyColTargetNode, className: "mono" },
+            { label: copy.backupPolicyColSchedule, className: "mono" },
+            { label: copy.backupPolicyColRetention }
+          ],
+          rows: backupTableRows,
+          emptyMessage: copy.noBackupPolicies,
+          filterPlaceholder: copy.dataFilterPlaceholder,
+          rowsPerPageLabel: copy.rowsPerPage,
+          showingLabel: copy.showing,
+          ofLabel: copy.of,
+          recordsLabel: copy.records,
+          defaultPageSize: 10
+        })}
+        ${renderEditorPanel("desired-state-backups-editors", backupRows, copy.noBackupPolicies)}
+      </div>`
     }
   ];
 

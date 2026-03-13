@@ -1002,7 +1002,7 @@ ${renderBaseStyleBlock()}
         top: calc(100% + 0.55rem);
         right: 0;
         z-index: 20;
-        width: min(44rem, calc(100vw - 2.4rem));
+        width: min(32rem, calc(100vw - 2.4rem));
         padding: 0.9rem;
         border: 1px solid rgba(13, 32, 56, 0.12);
         border-radius: 1.2rem;

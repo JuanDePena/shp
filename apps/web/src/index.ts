@@ -339,9 +339,6 @@ function renderLoginPage(notice?: PanelNotice): string {
     body: `<section class="grid">
       <article class="panel" style="max-width: 32rem; margin: 0 auto;">
         <h2>Operator access</h2>
-        <p class="muted">Authenticate against the local SHP API on ${escapeHtml(
-          `${config.api.host}:${String(config.api.port)}`
-        )}.</p>
         <form method="post" action="/auth/login" class="stack">
           <label>Email
             <input type="email" name="email" autocomplete="username" required />

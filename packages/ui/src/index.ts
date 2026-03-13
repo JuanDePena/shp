@@ -1087,6 +1087,29 @@ ${renderBaseStyleBlock()}
         color: var(--muted);
       }
 
+      .profile-facts {
+        display: grid;
+        grid-template-columns: 7.4rem minmax(0, 1fr);
+        gap: 0.5rem 0.9rem;
+        margin: 0;
+        align-items: start;
+      }
+
+      .profile-facts dt {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.74rem;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+      }
+
+      .profile-facts dd {
+        margin: 0;
+        color: var(--ink);
+        font-weight: 600;
+        word-break: break-word;
+      }
+
       .page-header {
         display: grid;
         gap: 0.45rem;

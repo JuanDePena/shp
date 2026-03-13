@@ -1059,6 +1059,19 @@ function renderDetailGrid(
   </dl>`;
 }
 
+function renderProfileFacts(
+  entries: Array<{ label: string; value: string }>
+): string {
+  return `<dl class="profile-facts">
+    ${entries
+      .map(
+        (entry) => `<dt>${escapeHtml(entry.label)}</dt>
+        <dd>${entry.value}</dd>`
+      )
+      .join("")}
+  </dl>`;
+}
+
 function renderActionForm(action: string, hiddenFields: Record<string, string>, label: string): string {
   return `<form method="post" action="${escapeHtml(action)}" class="inline-form">
     ${Object.entries(hiddenFields)
@@ -2353,7 +2366,7 @@ function renderDashboard(
         <span class="profile-meta">${escapeHtml(data.currentUser.email)}</span>
       </div>
     </div>
-    ${renderDetailGrid([
+    ${renderProfileFacts([
       {
         label: copy.globalRoles,
         value: escapeHtml(formatList(data.currentUser.globalRoles, copy.none))

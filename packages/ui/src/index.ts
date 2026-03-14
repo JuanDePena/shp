@@ -294,6 +294,14 @@ function renderBaseStyleBlock(): string {
         box-shadow: 0 1.1rem 2.6rem rgba(16, 39, 68, 0.08);
       }
 
+      .panel-muted {
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(245, 249, 253, 0.92)),
+          linear-gradient(145deg, rgba(16, 39, 68, 0.03), rgba(242, 140, 40, 0.06));
+        border-color: rgba(13, 32, 56, 0.08);
+        box-shadow: 0 0.8rem 2rem rgba(16, 39, 68, 0.05);
+      }
+
       .panel h2,
       .panel h3 {
         margin-top: 0;
@@ -1694,9 +1702,14 @@ ${renderBaseStyleBlock()}
 
         const tabRoots = Array.from(document.querySelectorAll("[data-tabs]"));
 
+        const getScopedTabs = (root, selector) =>
+          Array.from(root.querySelectorAll(selector)).filter(
+            (element) => element.closest("[data-tabs]") === root
+          );
+
         const activateTab = (root, targetId, updateHash) => {
-          const buttons = Array.from(root.querySelectorAll("[data-tab-button]"));
-          const panels = Array.from(root.querySelectorAll("[data-tab-panel]"));
+          const buttons = getScopedTabs(root, "[data-tab-button]");
+          const panels = getScopedTabs(root, "[data-tab-panel]");
           const panelMatch = panels.find((panel) => panel.id === targetId);
 
           if (!panelMatch) {
@@ -1722,7 +1735,7 @@ ${renderBaseStyleBlock()}
 
         tabRoots.forEach((root) => {
           const defaultTab = root.getAttribute("data-default-tab");
-          const buttons = Array.from(root.querySelectorAll("[data-tab-button]"));
+          const buttons = getScopedTabs(root, "[data-tab-button]");
 
           buttons.forEach((button) => {
             button.addEventListener("click", () => {
@@ -1740,7 +1753,10 @@ ${renderBaseStyleBlock()}
           });
 
           const currentHash = window.location.hash.slice(1);
-          if (currentHash && root.querySelector("#" + CSS.escape(currentHash))) {
+          const currentPanel = currentHash
+            ? root.querySelector("#" + CSS.escape(currentHash))
+            : null;
+          if (currentPanel && currentPanel.closest("[data-tabs]") === root) {
             activateTab(root, currentHash, false);
           } else if (defaultTab) {
             activateTab(root, defaultTab, false);
@@ -1755,7 +1771,8 @@ ${renderBaseStyleBlock()}
           }
 
           tabRoots.forEach((root) => {
-            if (root.querySelector("#" + CSS.escape(currentHash))) {
+            const panel = root.querySelector("#" + CSS.escape(currentHash));
+            if (panel && panel.closest("[data-tabs]") === root) {
               activateTab(root, currentHash, false);
             }
           });

@@ -1,6 +1,6 @@
 {
   "name": "@simplehost/panel-web",
-  "version": "2603.14.09",
+  "version": "2603.14.10",
   "private": true,
   "type": "module",
   "main": "dist/index.js",

@@ -141,6 +141,11 @@ interface WebCopy {
   auditTrailTitle: string;
   auditTrailDescription: string;
   payloadTitle: string;
+  previewTitle: string;
+  impactPreviewTitle: string;
+  dangerZoneTitle: string;
+  linkedOperationsTitle: string;
+  operationalSignalsTitle: string;
   relatedJobsTitle: string;
   relatedDriftTitle: string;
   latestCompleted: string;
@@ -151,6 +156,25 @@ interface WebCopy {
   openDesiredState: string;
   storageLocationLabel: string;
   resourceSelectorsLabel: string;
+  healthyNodes: string;
+  staleNodes: string;
+  nodesWithPendingJobs: string;
+  nodesWithFailures: string;
+  driftPending: string;
+  driftOutOfSync: string;
+  driftMissingSecrets: string;
+  recentQueuedJobs: string;
+  recentAppliedJobs: string;
+  recentFailedJobs: string;
+  succeededBackups: string;
+  failedBackups: string;
+  runningBackups: string;
+  policyCoverage: string;
+  transitionalBootstrapNote: string;
+  openJobHistory: string;
+  openDriftView: string;
+  openBackupsView: string;
+  openNodeHealth: string;
   nodeDiagnosticsTitle: string;
   nodeDiagnosticsDescription: string;
   driftDiagnosticsTitle: string;
@@ -331,6 +355,11 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     auditTrailTitle: "Recent audit",
     auditTrailDescription: "Recent control-plane mutations and runtime events.",
     payloadTitle: "Payload and result",
+    previewTitle: "Dispatch preview",
+    impactPreviewTitle: "Impact preview",
+    dangerZoneTitle: "Danger zone",
+    linkedOperationsTitle: "Linked operations",
+    operationalSignalsTitle: "Operational signals",
     relatedJobsTitle: "Related jobs",
     relatedDriftTitle: "Related drift",
     latestCompleted: "Completed",
@@ -341,6 +370,25 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     openDesiredState: "Open desired-state record",
     storageLocationLabel: "Storage location",
     resourceSelectorsLabel: "Resource selectors",
+    healthyNodes: "Healthy nodes",
+    staleNodes: "Stale nodes",
+    nodesWithPendingJobs: "Nodes with pending jobs",
+    nodesWithFailures: "Nodes with failures",
+    driftPending: "Pending drift",
+    driftOutOfSync: "Out-of-sync drift",
+    driftMissingSecrets: "Missing secrets",
+    recentQueuedJobs: "Queued jobs",
+    recentAppliedJobs: "Applied jobs",
+    recentFailedJobs: "Failed jobs",
+    succeededBackups: "Succeeded backups",
+    failedBackups: "Failed backups",
+    runningBackups: "Running backups",
+    policyCoverage: "Policy coverage",
+    transitionalBootstrapNote: "Transitional only. Keep operational edits in PostgreSQL desired state.",
+    openJobHistory: "Open job history",
+    openDriftView: "Open drift view",
+    openBackupsView: "Open backups view",
+    openNodeHealth: "Open node health",
     nodeDiagnosticsTitle: "Node diagnostics",
     nodeDiagnosticsDescription: "Inspect drift, recent jobs and routing scope for the selected node.",
     driftDiagnosticsTitle: "Drift diagnostics",
@@ -522,6 +570,11 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     auditTrailTitle: "Auditoría reciente",
     auditTrailDescription: "Mutaciones recientes del control plane y eventos de runtime.",
     payloadTitle: "Payload y resultado",
+    previewTitle: "Vista previa del despacho",
+    impactPreviewTitle: "Vista previa de impacto",
+    dangerZoneTitle: "Zona sensible",
+    linkedOperationsTitle: "Operaciones vinculadas",
+    operationalSignalsTitle: "Señales operativas",
     relatedJobsTitle: "Jobs relacionados",
     relatedDriftTitle: "Drift relacionado",
     latestCompleted: "Completado",
@@ -532,6 +585,25 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     openDesiredState: "Abrir recurso en estado deseado",
     storageLocationLabel: "Ubicación de almacenamiento",
     resourceSelectorsLabel: "Selectores de recursos",
+    healthyNodes: "Nodos saludables",
+    staleNodes: "Nodos sin señal reciente",
+    nodesWithPendingJobs: "Nodos con jobs pendientes",
+    nodesWithFailures: "Nodos con fallos",
+    driftPending: "Drift pendiente",
+    driftOutOfSync: "Drift fuera de sincronía",
+    driftMissingSecrets: "Secretos faltantes",
+    recentQueuedJobs: "Jobs en cola",
+    recentAppliedJobs: "Jobs aplicados",
+    recentFailedJobs: "Jobs fallidos",
+    succeededBackups: "Backups exitosos",
+    failedBackups: "Backups fallidos",
+    runningBackups: "Backups ejecutándose",
+    policyCoverage: "Cobertura de políticas",
+    transitionalBootstrapNote: "Solo transicional. Mantén las ediciones operativas en PostgreSQL como estado deseado.",
+    openJobHistory: "Abrir historial de jobs",
+    openDriftView: "Abrir vista de drift",
+    openBackupsView: "Abrir vista de backups",
+    openNodeHealth: "Abrir salud del nodo",
     nodeDiagnosticsTitle: "Diagnóstico del nodo",
     nodeDiagnosticsDescription: "Inspecciona drift, jobs recientes y alcance operativo del nodo seleccionado.",
     driftDiagnosticsTitle: "Diagnóstico de drift",
@@ -1302,7 +1374,9 @@ function renderJobFeedPanel(
     </div>
     ${renderFeedList(
       jobs.map((job) => ({
-        title: escapeHtml(job.kind),
+        title: `<a class="detail-link" href="${escapeHtml(
+          buildDashboardViewUrl("job-history", undefined, job.jobId)
+        )}">${escapeHtml(job.kind)}</a>`,
         meta: escapeHtml(
           [job.jobId, job.status ?? "queued", formatDate(job.createdAt, locale)].join(" · ")
         ),
@@ -1481,6 +1555,21 @@ function renderDetailGrid(
       )
       .join("")}
   </dl>`;
+}
+
+function renderSignalStrip(
+  entries: Array<{ label: string; value: string; tone?: "default" | "success" | "danger" | "muted" }>
+): string {
+  return `<div class="stats stats-compact">
+    ${entries
+      .map(
+        (entry) => `<article class="stat stat-compact">
+          <strong>${entry.tone ? renderPill(entry.value, entry.tone) : escapeHtml(entry.value)}</strong>
+          <span>${escapeHtml(entry.label)}</span>
+        </article>`
+      )
+      .join("")}
+  </div>`;
 }
 
 function renderProfileFacts(
@@ -1924,6 +2013,18 @@ function renderDesiredStateSection(
           { label: copy.navZones, value: renderPill(String(tenantZoneCount(selectedTenant.slug)), tenantZoneCount(selectedTenant.slug) > 0 ? "success" : "muted") },
           { label: copy.navBackupPolicies, value: renderPill(String(tenantBackupCount(selectedTenant.slug)), tenantBackupCount(selectedTenant.slug) > 0 ? "success" : "muted") }
         ])}
+        <div class="toolbar">
+          ${
+            selectedTenantJobs[0]
+              ? `<a class="button-link secondary" href="${escapeHtml(
+                  buildDashboardViewUrl("job-history", undefined, selectedTenantJobs[0].jobId)
+                )}">${escapeHtml(copy.openJobHistory)}</a>`
+              : ""
+          }
+          <a class="button-link secondary" href="${escapeHtml(
+            buildDashboardViewUrl("desired-state", "desired-state-backups")
+          )}">${escapeHtml(copy.openBackupsView)}</a>
+        </div>
         ${renderResourceActivityStack(selectedTenantJobs, selectedTenantAuditEvents)}
       </article>`
     : "";
@@ -1936,23 +2037,62 @@ function renderDesiredStateSection(
             <p class="muted section-description">${escapeHtml(copy.desiredStateEditorsDescription)}</p>
           </div>
         </div>
-        <form method="post" action="/resources/tenants/upsert" class="stack">
-          <input type="hidden" name="originalSlug" value="${escapeHtml(selectedTenant.slug)}" />
-          <div class="form-grid">
-            <label>Slug
-              <input name="slug" value="${escapeHtml(selectedTenant.slug)}" required spellcheck="false" />
-            </label>
-            <label>Display name
-              <input name="displayName" value="${escapeHtml(selectedTenant.displayName)}" required />
-            </label>
+        <div class="grid grid-two">
+          <form method="post" action="/resources/tenants/upsert" class="panel panel-nested detail-shell">
+            <input type="hidden" name="originalSlug" value="${escapeHtml(selectedTenant.slug)}" />
+            <div>
+              <h3>${escapeHtml(copy.detailActionsTitle)}</h3>
+              <p class="muted section-description">${escapeHtml(copy.desiredStateEditorsDescription)}</p>
+            </div>
+            <div class="form-grid">
+              <label>Slug
+                <input name="slug" value="${escapeHtml(selectedTenant.slug)}" required spellcheck="false" />
+              </label>
+              <label>Display name
+                <input name="displayName" value="${escapeHtml(selectedTenant.displayName)}" required />
+              </label>
+            </div>
+            <div class="toolbar">
+              <button type="submit">Save tenant</button>
+            </div>
+          </form>
+          <article class="panel panel-nested detail-shell">
+            <div>
+              <h3>${escapeHtml(copy.impactPreviewTitle)}</h3>
+              <p class="muted section-description">${escapeHtml(copy.selectedResourceDescription)}</p>
+            </div>
+            ${renderDetailGrid([
+              { label: copy.navApps, value: escapeHtml(String(tenantAppCount(selectedTenant.slug))) },
+              { label: copy.navZones, value: escapeHtml(String(tenantZoneCount(selectedTenant.slug))) },
+              { label: copy.navBackupPolicies, value: escapeHtml(String(tenantBackupCount(selectedTenant.slug))) }
+            ])}
+            <div class="toolbar">
+              <a class="button-link secondary" href="${escapeHtml(
+                buildDashboardViewUrl("desired-state", "desired-state-apps")
+              )}">${escapeHtml(copy.navApps)}</a>
+              <a class="button-link secondary" href="${escapeHtml(
+                buildDashboardViewUrl("desired-state", "desired-state-zones")
+              )}">${escapeHtml(copy.navZones)}</a>
+            </div>
+          </article>
+        </div>
+        <article class="panel panel-nested detail-shell danger-shell">
+          <div>
+            <h3>${escapeHtml(copy.dangerZoneTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.selectedResourceDescription)}</p>
           </div>
-          <div class="toolbar">
-            <button type="submit">Save tenant</button>
-            <button class="danger" type="submit" formaction="/resources/tenants/delete" data-confirm="${escapeHtml(
+          ${renderDetailGrid([
+            { label: copy.navApps, value: escapeHtml(String(tenantAppCount(selectedTenant.slug))) },
+            { label: copy.navZones, value: escapeHtml(String(tenantZoneCount(selectedTenant.slug))) },
+            { label: copy.navBackupPolicies, value: escapeHtml(String(tenantBackupCount(selectedTenant.slug))) }
+          ])}
+          <form method="post" action="/resources/tenants/delete" class="toolbar">
+            <input type="hidden" name="slug" value="${escapeHtml(selectedTenant.slug)}" />
+            <button class="danger" type="submit" data-confirm="${escapeHtml(
               `Delete tenant ${selectedTenant.slug}? Related apps, zones and backup policies will be removed from desired state.`
             )}">Delete tenant</button>
-          </div>
-        </form>
+          </form>
+        </article>
       </article>`
     : "";
 
@@ -1981,6 +2121,13 @@ function renderDesiredStateSection(
           <a class="button-link secondary" href="${escapeHtml(
             buildDashboardViewUrl("node-health", undefined, selectedNode.nodeId)
           )}">${escapeHtml(copy.nodeHealthTitle)}</a>
+          ${
+            selectedNodeDesiredJobs[0]
+              ? `<a class="button-link secondary" href="${escapeHtml(
+                  buildDashboardViewUrl("job-history", undefined, selectedNodeDesiredJobs[0].jobId)
+                )}">${escapeHtml(copy.openJobHistory)}</a>`
+              : ""
+          }
         </div>
         ${renderResourceActivityStack(selectedNodeDesiredJobs, selectedNodeDesiredAuditEvents)}
       </article>`
@@ -1994,29 +2141,61 @@ function renderDesiredStateSection(
             <p class="muted section-description">${escapeHtml(copy.desiredStateEditorsDescription)}</p>
           </div>
         </div>
-        <form method="post" action="/resources/nodes/upsert" class="stack">
-          <input type="hidden" name="originalNodeId" value="${escapeHtml(selectedNode.nodeId)}" />
-          <div class="form-grid">
-            <label>Node ID
-              <input name="nodeId" value="${escapeHtml(selectedNode.nodeId)}" required spellcheck="false" />
-            </label>
-            <label>Hostname
-              <input name="hostname" value="${escapeHtml(selectedNode.hostname)}" required spellcheck="false" />
-            </label>
-            <label>Public IPv4
-              <input name="publicIpv4" value="${escapeHtml(selectedNode.publicIpv4)}" required spellcheck="false" />
-            </label>
-            <label>WireGuard address
-              <input name="wireguardAddress" value="${escapeHtml(selectedNode.wireguardAddress)}" required spellcheck="false" />
-            </label>
+        <div class="grid grid-two">
+          <form method="post" action="/resources/nodes/upsert" class="panel panel-nested detail-shell">
+            <input type="hidden" name="originalNodeId" value="${escapeHtml(selectedNode.nodeId)}" />
+            <div>
+              <h3>${escapeHtml(copy.detailActionsTitle)}</h3>
+              <p class="muted section-description">${escapeHtml(copy.desiredStateEditorsDescription)}</p>
+            </div>
+            <div class="form-grid">
+              <label>Node ID
+                <input name="nodeId" value="${escapeHtml(selectedNode.nodeId)}" required spellcheck="false" />
+              </label>
+              <label>Hostname
+                <input name="hostname" value="${escapeHtml(selectedNode.hostname)}" required spellcheck="false" />
+              </label>
+              <label>Public IPv4
+                <input name="publicIpv4" value="${escapeHtml(selectedNode.publicIpv4)}" required spellcheck="false" />
+              </label>
+              <label>WireGuard address
+                <input name="wireguardAddress" value="${escapeHtml(selectedNode.wireguardAddress)}" required spellcheck="false" />
+              </label>
+            </div>
+            <div class="toolbar">
+              <button type="submit">Save node</button>
+            </div>
+          </form>
+          <article class="panel panel-nested detail-shell">
+            <div>
+              <h3>${escapeHtml(copy.impactPreviewTitle)}</h3>
+              <p class="muted section-description">${escapeHtml(copy.nodeDiagnosticsDescription)}</p>
+            </div>
+            ${renderDetailGrid([
+              { label: copy.navApps, value: escapeHtml(String(nodePrimaryAppCount(selectedNode.nodeId))) },
+              { label: copy.navZones, value: escapeHtml(String(nodePrimaryZoneCount(selectedNode.nodeId))) },
+              { label: copy.navBackupPolicies, value: escapeHtml(String(nodeBackupCount(selectedNode.nodeId))) },
+              { label: copy.nodeHealthTitle, value: `<a class="detail-link" href="${escapeHtml(buildDashboardViewUrl("node-health", undefined, selectedNode.nodeId))}">${escapeHtml(copy.openNodeHealth)}</a>` }
+            ])}
+          </article>
+        </div>
+        <article class="panel panel-nested detail-shell danger-shell">
+          <div>
+            <h3>${escapeHtml(copy.dangerZoneTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.selectedResourceDescription)}</p>
           </div>
-          <div class="toolbar">
-            <button type="submit">Save node</button>
-            <button class="danger" type="submit" formaction="/resources/nodes/delete" data-confirm="${escapeHtml(
+          ${renderDetailGrid([
+            { label: copy.navApps, value: escapeHtml(String(nodePrimaryAppCount(selectedNode.nodeId))) },
+            { label: copy.navZones, value: escapeHtml(String(nodePrimaryZoneCount(selectedNode.nodeId))) },
+            { label: copy.navBackupPolicies, value: escapeHtml(String(nodeBackupCount(selectedNode.nodeId))) }
+          ])}
+          <form method="post" action="/resources/nodes/delete" class="toolbar">
+            <input type="hidden" name="nodeId" value="${escapeHtml(selectedNode.nodeId)}" />
+            <button class="danger" type="submit" data-confirm="${escapeHtml(
               `Delete node ${selectedNode.nodeId}? Review apps, zones and backup policies that still target this node before continuing.`
             )}">Delete node</button>
-          </div>
-        </form>
+          </form>
+        </article>
       </article>`
     : "";
 
@@ -2073,6 +2252,9 @@ function renderDesiredStateSection(
           <a class="button-link secondary" href="${escapeHtml(
             buildDashboardViewUrl("backups", undefined, selectedBackupPolicy.policySlug)
           )}">${escapeHtml(copy.backupsTitle)}</a>
+          <a class="button-link secondary" href="${escapeHtml(
+            buildDashboardViewUrl("node-health", undefined, selectedBackupPolicy.targetNodeId)
+          )}">${escapeHtml(copy.openNodeHealth)}</a>
         </div>
         ${renderAuditPanel(copy, locale, selectedBackupAuditEvents)}
       </article>`
@@ -2088,40 +2270,86 @@ function renderDesiredStateSection(
         </div>
         <form method="post" action="/resources/backups/upsert" class="stack">
           <input type="hidden" name="originalPolicySlug" value="${escapeHtml(selectedBackupPolicy.policySlug)}" />
-          <div class="form-grid">
-            <label>Policy slug
-              <input name="policySlug" value="${escapeHtml(selectedBackupPolicy.policySlug)}" required spellcheck="false" />
-            </label>
-            <label>Tenant slug
-              <select name="tenantSlug" required>
-                ${renderSelectOptions(tenantOptions, selectedBackupPolicy.tenantSlug)}
-              </select>
-            </label>
-            <label>Target node
-              <select name="targetNodeId" required>
-                ${renderSelectOptions(nodeOptions, selectedBackupPolicy.targetNodeId)}
-              </select>
-            </label>
-            <label>Schedule
-              <input name="schedule" value="${escapeHtml(selectedBackupPolicy.schedule)}" required />
-            </label>
-            <label>Retention days
-              <input type="number" name="retentionDays" min="1" value="${escapeHtml(String(selectedBackupPolicy.retentionDays))}" required />
-            </label>
-            <label>Storage location
-              <input name="storageLocation" value="${escapeHtml(selectedBackupPolicy.storageLocation)}" required />
-            </label>
-            <label>Resource selectors
-              <input name="resourceSelectors" value="${escapeHtml(selectedBackupPolicy.resourceSelectors.join(", "))}" />
-            </label>
+          <div class="grid grid-two">
+            <article class="panel panel-nested detail-shell">
+              <div>
+                <h3>${escapeHtml(copy.detailActionsTitle)}</h3>
+              </div>
+              <div class="form-grid">
+                <label>Policy slug
+                  <input name="policySlug" value="${escapeHtml(selectedBackupPolicy.policySlug)}" required spellcheck="false" />
+                </label>
+                <label>Tenant slug
+                  <select name="tenantSlug" required>
+                    ${renderSelectOptions(tenantOptions, selectedBackupPolicy.tenantSlug)}
+                  </select>
+                </label>
+                <label>Target node
+                  <select name="targetNodeId" required>
+                    ${renderSelectOptions(nodeOptions, selectedBackupPolicy.targetNodeId)}
+                  </select>
+                </label>
+                <label>Schedule
+                  <input name="schedule" value="${escapeHtml(selectedBackupPolicy.schedule)}" required />
+                </label>
+                <label>Retention days
+                  <input type="number" name="retentionDays" min="1" value="${escapeHtml(String(selectedBackupPolicy.retentionDays))}" required />
+                </label>
+              </div>
+            </article>
+            <article class="panel panel-nested detail-shell">
+              <div>
+                <h3>${escapeHtml(copy.impactPreviewTitle)}</h3>
+                <p class="muted section-description">${escapeHtml(copy.backupsDescription)}</p>
+              </div>
+              <div class="form-grid">
+                <label>Storage location
+                  <input name="storageLocation" value="${escapeHtml(selectedBackupPolicy.storageLocation)}" required />
+                </label>
+                <label>Resource selectors
+                  <input name="resourceSelectors" value="${escapeHtml(selectedBackupPolicy.resourceSelectors.join(", "))}" />
+                </label>
+              </div>
+              ${renderDetailGrid([
+                {
+                  label: copy.policyCoverage,
+                  value: escapeHtml(String(data.backups.policies.length))
+                },
+                {
+                  label: copy.backupColStatus,
+                  value: selectedBackupRun
+                    ? renderPill(
+                        selectedBackupRun.status,
+                        selectedBackupRun.status === "succeeded"
+                          ? "success"
+                          : selectedBackupRun.status === "failed"
+                            ? "danger"
+                            : "muted"
+                      )
+                    : renderPill(copy.none, "muted")
+                }
+              ])}
+            </article>
           </div>
           <div class="toolbar">
             <button type="submit">Save backup policy</button>
-            <button class="danger" type="submit" formaction="/resources/backups/delete" data-confirm="${escapeHtml(
-              `Delete backup policy ${selectedBackupPolicy.policySlug}? Future backup coverage and run tracking for this policy will stop.`
-            )}">Delete backup policy</button>
+            <a class="button-link secondary" href="${escapeHtml(
+              buildDashboardViewUrl("backups", undefined, selectedBackupPolicy.policySlug)
+            )}">${escapeHtml(copy.openBackupsView)}</a>
           </div>
         </form>
+        <article class="panel panel-nested detail-shell danger-shell">
+          <div>
+            <h3>${escapeHtml(copy.dangerZoneTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.backupPolicyContextDescription)}</p>
+          </div>
+          <form method="post" action="/resources/backups/delete" class="toolbar">
+            <input type="hidden" name="policySlug" value="${escapeHtml(selectedBackupPolicy.policySlug)}" />
+            <button class="danger" type="submit" data-confirm="${escapeHtml(
+              `Delete backup policy ${selectedBackupPolicy.policySlug}? Future backup coverage and run tracking for this policy will stop.`
+            )}">Delete backup policy</button>
+          </form>
+        </article>
       </article>`
     : "";
   const zoneDetailPanel = selectedZone
@@ -2163,6 +2391,21 @@ function renderDesiredStateSection(
             )}
           </div>
         </div>
+        <article class="panel panel-nested detail-shell">
+          <div>
+            <h3>${escapeHtml(copy.previewTitle)}</h3>
+          </div>
+          ${renderDetailGrid([
+            { label: copy.zoneColPrimaryNode, value: `<span class="mono">${escapeHtml(selectedZone.primaryNodeId)}</span>` },
+            { label: copy.zoneColRecordCount, value: escapeHtml(String(selectedZone.records.length)) },
+            {
+              label: copy.linkedResource,
+              value: `<a class="detail-link mono" href="${escapeHtml(
+                buildDashboardViewUrl("resource-drift", undefined, `zone:${selectedZone.zoneName}`)
+              )}">${escapeHtml(`zone:${selectedZone.zoneName}`)}</a>`
+            }
+          ])}
+        </article>
         ${
           selectedZone.records.length > 0
             ? `<div class="table-wrap">
@@ -2191,6 +2434,18 @@ function renderDesiredStateSection(
               </div>`
             : `<p class="empty">${escapeHtml(copy.noZones)}</p>`
         }
+        <div class="toolbar">
+          <a class="button-link secondary" href="${escapeHtml(
+            buildDashboardViewUrl("resource-drift", undefined, `zone:${selectedZone.zoneName}`)
+          )}">${escapeHtml(copy.openDriftView)}</a>
+          ${
+            selectedZoneJobs[0]
+              ? `<a class="button-link secondary" href="${escapeHtml(
+                  buildDashboardViewUrl("job-history", undefined, selectedZoneJobs[0].jobId)
+                )}">${escapeHtml(copy.openJobHistory)}</a>`
+              : ""
+          }
+        </div>
         ${renderResourceActivityStack(selectedZoneJobs, selectedZoneAuditEvents)}
       </article>`
     : "";
@@ -2295,6 +2550,19 @@ function renderDesiredStateSection(
           </article>
           <article class="panel">
             <h3>${escapeHtml(copy.detailActionsTitle)}</h3>
+            ${renderDetailGrid([
+              { label: copy.zoneColZone, value: escapeHtml(selectedApp.zoneName) },
+              {
+                label: copy.zoneColPrimaryNode,
+                value: `<span class="mono">${escapeHtml(selectedApp.primaryNodeId)}</span>`
+              },
+              {
+                label: copy.linkedResource,
+                value: `<a class="detail-link mono" href="${escapeHtml(
+                  buildDashboardViewUrl("resource-drift", undefined, `app:${selectedApp.slug}:proxy:${selectedApp.primaryNodeId}`)
+                )}">${escapeHtml(`app:${selectedApp.slug}:proxy:${selectedApp.primaryNodeId}`)}</a>`
+              }
+            ])}
             <div class="toolbar">
               ${renderActionForm(
                 "/actions/app-reconcile",
@@ -2308,6 +2576,18 @@ function renderDesiredStateSection(
                 copy.actionDispatchProxyRender,
                 { confirmMessage: `Dispatch proxy.render for app ${selectedApp.slug}?` }
               )}
+            </div>
+            <div class="toolbar">
+              <a class="button-link secondary" href="${escapeHtml(
+                buildDashboardViewUrl("resource-drift", undefined, `app:${selectedApp.slug}:proxy:${selectedApp.primaryNodeId}`)
+              )}">${escapeHtml(copy.openDriftView)}</a>
+              ${
+                selectedAppJobs[0]
+                  ? `<a class="button-link secondary" href="${escapeHtml(
+                      buildDashboardViewUrl("job-history", undefined, selectedAppJobs[0].jobId)
+                    )}">${escapeHtml(copy.openJobHistory)}</a>`
+                  : ""
+              }
             </div>
           </article>
         </div>
@@ -2444,6 +2724,19 @@ function renderDesiredStateSection(
           </article>
           <article class="panel">
             <h3>${escapeHtml(copy.detailActionsTitle)}</h3>
+            ${renderDetailGrid([
+              { label: copy.databaseColEngine, value: escapeHtml(selectedDatabase.engine) },
+              {
+                label: copy.databaseColDatabase,
+                value: `<span class="mono">${escapeHtml(selectedDatabase.databaseName)}</span>`
+              },
+              {
+                label: copy.linkedResource,
+                value: `<a class="detail-link mono" href="${escapeHtml(
+                  buildDashboardViewUrl("resource-drift", undefined, `database:${selectedDatabase.appSlug}`)
+                )}">${escapeHtml(`database:${selectedDatabase.appSlug}`)}</a>`
+              }
+            ])}
             <div class="toolbar">
               ${renderActionForm(
                 "/actions/database-reconcile",
@@ -2453,6 +2746,18 @@ function renderDesiredStateSection(
                   confirmMessage: `Dispatch database reconcile for ${selectedDatabase.appSlug}?`
                 }
               )}
+            </div>
+            <div class="toolbar">
+              <a class="button-link secondary" href="${escapeHtml(
+                buildDashboardViewUrl("resource-drift", undefined, `database:${selectedDatabase.appSlug}`)
+              )}">${escapeHtml(copy.openDriftView)}</a>
+              ${
+                selectedDatabaseJobs[0]
+                  ? `<a class="button-link secondary" href="${escapeHtml(
+                      buildDashboardViewUrl("job-history", undefined, selectedDatabaseJobs[0].jobId)
+                    )}">${escapeHtml(copy.openJobHistory)}</a>`
+                  : ""
+              }
             </div>
           </article>
         </div>
@@ -3159,6 +3464,32 @@ function renderDashboard(
        )}</p>`
     : `<p class="muted">${escapeHtml(copy.noReconciliationRun)}</p>`;
 
+  const now = Date.now();
+  const staleThresholdMs = 15 * 60 * 1000;
+  const staleNodeCount = data.nodeHealth.filter((node) => {
+    const lastSeenAt = node.lastSeenAt ? Date.parse(node.lastSeenAt) : Number.NaN;
+    return Number.isFinite(lastSeenAt) && now - lastSeenAt > staleThresholdMs;
+  }).length;
+  const pendingNodeCount = data.nodeHealth.filter((node) => node.pendingJobCount > 0).length;
+  const failingNodeCount = data.nodeHealth.filter((node) => node.latestJobStatus === "failed").length;
+  const healthyNodeCount = data.nodeHealth.filter((node) => {
+    const lastSeenAt = node.lastSeenAt ? Date.parse(node.lastSeenAt) : Number.NaN;
+    const stale = Number.isFinite(lastSeenAt) && now - lastSeenAt > staleThresholdMs;
+    return !stale && node.pendingJobCount === 0 && node.latestJobStatus !== "failed";
+  }).length;
+  const driftPendingCount = data.drift.filter((entry) => entry.driftStatus === "pending").length;
+  const driftOutOfSyncCount = data.drift.filter((entry) => entry.driftStatus === "out_of_sync").length;
+  const driftMissingSecretCount = data.drift.filter(
+    (entry) => entry.driftStatus === "missing_secret"
+  ).length;
+  const queuedJobCount = data.jobHistory.filter((job) => !job.status).length;
+  const appliedJobCount = data.jobHistory.filter((job) => job.status === "applied").length;
+  const failedJobCount = data.jobHistory.filter((job) => job.status === "failed").length;
+  const backupSucceededCount = data.backups.latestRuns.filter((run) => run.status === "succeeded").length;
+  const backupFailedCount = data.backups.latestRuns.filter((run) => run.status === "failed").length;
+  const backupRunningCount = data.backups.latestRuns.filter((run) => run.status === "running").length;
+  const backupCoverageCount = data.backups.policies.length;
+
   const renderActionFacts = (rows: Array<{ label: string; value: string }>): string => `<dl class="action-card-facts">
       ${rows
         .map(
@@ -3282,13 +3613,10 @@ function renderDashboard(
         )}</a>
       </article>
     </div>
-    <article class="panel panel-muted detail-shell">
-      <div class="section-head">
-        <div>
-          <h3>${escapeHtml(copy.bootstrapInventoryTitle)}</h3>
-          <p class="muted section-description">${escapeHtml(copy.bootstrapInventoryDescription)}</p>
-        </div>
-      </div>
+    <details class="panel panel-muted detail-shell">
+      <summary>${escapeHtml(copy.bootstrapInventoryTitle)}</summary>
+      <p class="muted section-description">${escapeHtml(copy.bootstrapInventoryDescription)}</p>
+      <p class="muted">${escapeHtml(copy.transitionalBootstrapNote)}</p>
       ${renderActionFacts([
         { label: copy.latestImport, value: escapeHtml(latestImportSummary) },
         {
@@ -3315,7 +3643,7 @@ function renderDashboard(
           )}"
         >${escapeHtml(copy.actionsImportInventory)}</button>
       </form>
-    </article>
+    </details>
   </div>`;
 
   const topbarUserPanelHtml = `<div class="profile-sheet">
@@ -3507,6 +3835,17 @@ function renderDashboard(
       </div>
     </div>
     ${renderStats(data.overview, copy, locale)}
+    <div class="stack">
+      <div>
+        <h3>${escapeHtml(copy.operationalSignalsTitle)}</h3>
+      </div>
+      ${renderSignalStrip([
+        { label: copy.healthyNodes, value: String(healthyNodeCount), tone: healthyNodeCount > 0 ? "success" : "muted" },
+        { label: copy.staleNodes, value: String(staleNodeCount), tone: staleNodeCount > 0 ? "danger" : "success" },
+        { label: copy.driftMissingSecrets, value: String(driftMissingSecretCount), tone: driftMissingSecretCount > 0 ? "danger" : "success" },
+        { label: copy.failedBackups, value: String(backupFailedCount), tone: backupFailedCount > 0 ? "danger" : "success" }
+      ])}
+    </div>
     ${actionBar}
   </section>`;
 
@@ -3862,6 +4201,12 @@ function renderDashboard(
     : `<article class="panel"><p class="empty">${escapeHtml(copy.noBackupPolicies)}</p></article>`;
 
   const nodeHealthSection = `<section id="section-node-health" class="panel section-panel">
+    ${renderSignalStrip([
+      { label: copy.healthyNodes, value: String(healthyNodeCount), tone: healthyNodeCount > 0 ? "success" : "muted" },
+      { label: copy.staleNodes, value: String(staleNodeCount), tone: staleNodeCount > 0 ? "danger" : "success" },
+      { label: copy.nodesWithPendingJobs, value: String(pendingNodeCount), tone: pendingNodeCount > 0 ? "danger" : "success" },
+      { label: copy.nodesWithFailures, value: String(failingNodeCount), tone: failingNodeCount > 0 ? "danger" : "success" }
+    ])}
     ${renderDataTable({
       id: "section-node-health-table",
       heading: copy.nodeHealthTitle,
@@ -3899,6 +4244,12 @@ function renderDashboard(
   </section>`;
 
   const resourceDriftSection = `<section id="section-resource-drift" class="panel section-panel">
+    ${renderSignalStrip([
+      { label: copy.resourcesWithDrift, value: String(data.overview.driftedResourceCount), tone: data.overview.driftedResourceCount > 0 ? "danger" : "success" },
+      { label: copy.driftPending, value: String(driftPendingCount), tone: driftPendingCount > 0 ? "muted" : "success" },
+      { label: copy.driftOutOfSync, value: String(driftOutOfSyncCount), tone: driftOutOfSyncCount > 0 ? "danger" : "success" },
+      { label: copy.driftMissingSecrets, value: String(driftMissingSecretCount), tone: driftMissingSecretCount > 0 ? "danger" : "success" }
+    ])}
     ${renderDataTable({
       id: "section-resource-drift-table",
       heading: copy.resourceDriftTitle,
@@ -3931,6 +4282,12 @@ function renderDashboard(
   </section>`;
 
   const jobHistorySection = `<section id="section-job-history" class="panel section-panel">
+    ${renderSignalStrip([
+      { label: copy.recentQueuedJobs, value: String(queuedJobCount), tone: queuedJobCount > 0 ? "muted" : "success" },
+      { label: copy.recentAppliedJobs, value: String(appliedJobCount), tone: appliedJobCount > 0 ? "success" : "muted" },
+      { label: copy.recentFailedJobs, value: String(failedJobCount), tone: failedJobCount > 0 ? "danger" : "success" },
+      { label: copy.resourcesWithDrift, value: String(data.overview.driftedResourceCount), tone: data.overview.driftedResourceCount > 0 ? "danger" : "success" }
+    ])}
     ${renderDataTable({
       id: "section-job-history-table",
       heading: copy.jobHistoryTitle,
@@ -3964,6 +4321,12 @@ function renderDashboard(
   </section>`;
 
   const backupsSection = `<section id="section-backups" class="panel section-panel">
+    ${renderSignalStrip([
+      { label: copy.succeededBackups, value: String(backupSucceededCount), tone: backupSucceededCount > 0 ? "success" : "muted" },
+      { label: copy.runningBackups, value: String(backupRunningCount), tone: backupRunningCount > 0 ? "muted" : "success" },
+      { label: copy.failedBackups, value: String(backupFailedCount), tone: backupFailedCount > 0 ? "danger" : "success" },
+      { label: copy.policyCoverage, value: String(backupCoverageCount), tone: backupCoverageCount > 0 ? "success" : "muted" }
+    ])}
     ${renderDataTable({
       id: "section-backups-table",
       heading: copy.backupsTitle,

@@ -302,6 +302,13 @@ function renderBaseStyleBlock(): string {
         box-shadow: 0 0.8rem 2rem rgba(16, 39, 68, 0.05);
       }
 
+      .danger-shell {
+        border-color: rgba(212, 68, 47, 0.18);
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(252, 241, 239, 0.92)),
+          linear-gradient(145deg, rgba(212, 68, 47, 0.05), rgba(255, 255, 255, 0.92));
+      }
+
       .panel h2,
       .panel h3 {
         margin-top: 0;
@@ -434,6 +441,18 @@ function renderBaseStyleBlock(): string {
         font-size: 0.9rem;
       }
 
+      .stats-compact {
+        margin-bottom: 1rem;
+      }
+
+      .stat-compact {
+        padding: 0.85rem 0.95rem;
+      }
+
+      .stat-compact strong {
+        font-size: 1.35rem;
+      }
+
       .table-wrap {
         overflow-x: auto;
         border: 1px solid rgba(13, 32, 56, 0.08);
@@ -503,6 +522,19 @@ function renderBaseStyleBlock(): string {
       details {
         border-top: 1px solid rgba(13, 32, 56, 0.08);
         padding-top: 0.75rem;
+      }
+
+      details.panel {
+        border-top: none;
+        padding-top: 1.15rem;
+      }
+
+      details.panel summary {
+        list-style: none;
+      }
+
+      details.panel summary::-webkit-details-marker {
+        display: none;
       }
 
       details + details {

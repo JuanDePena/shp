@@ -6350,43 +6350,42 @@ function renderDashboard(
           >${escapeHtml(copy.actionsRunReconciliation)}</button>
         </form>
       </article>
-      <article class="action-card action-card-muted">
-        <span class="action-eyebrow">${escapeHtml(copy.bootstrapInventoryTitle)}</span>
-        <h3>${escapeHtml(copy.bootstrapInventoryTitle)}</h3>
-        <p class="muted">${escapeHtml(copy.bootstrapInventoryDescription)}</p>
-        <div class="action-card-context">
-          <span class="action-card-context-title">${escapeHtml(copy.latestImport)}</span>
-          ${renderActionFacts(
-            [
-              {
-                label: copy.latestImport,
-                value: escapeHtml(
-                  data.inventory.latestImport
-                    ? `${formatDate(data.inventory.latestImport.importedAt, locale)} · ${data.inventory.latestImport.sourcePath}`
-                    : copy.never
-                )
-              },
-              {
-                label: copy.records,
-                value: escapeHtml(
-                  interpolateCopy(copy.latestImportCounts, {
-                    nodes: data.inventory.nodes.length,
-                    zones: data.inventory.zones.length,
-                    apps: data.inventory.apps.length,
-                    databases: data.inventory.databases.length
-                  })
-                )
-              }
-            ],
-            { className: "action-card-facts-wide-labels" }
-          )}
-        </div>
-        <p class="action-card-note">${escapeHtml(copy.dailyOperationsSourceNote)}</p>
-        <a class="button-link secondary" href="/inventory/export">${escapeHtml(
-          copy.actionsDownloadYaml
-        )}</a>
-      </article>
     </div>`;
+
+  const bootstrapInventoryPanel = `<details class="panel panel-muted detail-shell">
+    <summary>${escapeHtml(copy.bootstrapInventoryTitle)}</summary>
+    <p class="muted section-description">${escapeHtml(copy.bootstrapInventoryDescription)}</p>
+    <p class="muted">${escapeHtml(copy.dailyOperationsSourceNote)}</p>
+    ${renderActionFacts(
+      [
+        {
+          label: copy.latestImport,
+          value: escapeHtml(
+            data.inventory.latestImport
+              ? `${formatDate(data.inventory.latestImport.importedAt, locale)} · ${data.inventory.latestImport.sourcePath}`
+              : copy.never
+          )
+        },
+        {
+          label: copy.records,
+          value: escapeHtml(
+            interpolateCopy(copy.latestImportCounts, {
+              nodes: data.inventory.nodes.length,
+              zones: data.inventory.zones.length,
+              apps: data.inventory.apps.length,
+              databases: data.inventory.databases.length
+            })
+          )
+        }
+      ],
+      { className: "action-card-facts-wide-labels" }
+    )}
+    <div class="toolbar">
+      <a class="button-link secondary" href="/inventory/export">${escapeHtml(
+        copy.actionsDownloadYaml
+      )}</a>
+    </div>
+  </details>`;
 
   const topbarUserPanelHtml = `<div class="profile-sheet">
     <div class="profile-sheet-head">
@@ -6589,6 +6588,7 @@ function renderDashboard(
       ])}
     </div>
     ${actionBar}
+    ${bootstrapInventoryPanel}
   </section>`;
 
   const nodeDiagnosticsPanel = selectedNodeHealth

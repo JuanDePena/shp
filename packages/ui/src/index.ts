@@ -1325,6 +1325,10 @@ ${renderBaseStyleBlock()}
         align-items: baseline;
       }
 
+      .action-card-facts-wide-labels .action-card-facts-row {
+        grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+      }
+
       .action-card-facts dt {
         margin: 0;
         color: var(--muted);

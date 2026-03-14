@@ -1614,8 +1614,13 @@ function renderSignalStrip(
   </div>`;
 }
 
-function renderActionFacts(rows: Array<{ label: string; value: string }>): string {
-  return `<dl class="action-card-facts">
+function renderActionFacts(
+  rows: Array<{ label: string; value: string }>,
+  options: { className?: string } = {}
+): string {
+  const className = options.className ? ` ${escapeHtml(options.className)}` : "";
+
+  return `<dl class="action-card-facts${className}">
       ${rows
         .map(
           (row) => `<div class="action-card-facts-row">
@@ -4651,22 +4656,25 @@ function renderDashboard(
         <p class="muted">${escapeHtml(copy.actionExportDescription)}</p>
         <div class="action-card-context">
           <span class="action-card-context-title">${escapeHtml(copy.usersAndScope)}</span>
-          ${renderActionFacts([
-            {
-              label: copy.emailLabel,
-              value: `<strong>${escapeHtml(data.currentUser.displayName)}</strong> &lt;${escapeHtml(
-                data.currentUser.email
-              )}&gt;`
-            },
-            {
-              label: copy.globalRoles,
-              value: escapeHtml(formatList(data.currentUser.globalRoles, copy.none))
-            },
-            {
-              label: copy.tenantMemberships,
-              value: escapeHtml(tenantMemberships)
-            }
-          ])}
+          ${renderActionFacts(
+            [
+              {
+                label: copy.emailLabel,
+                value: `<strong>${escapeHtml(data.currentUser.displayName)}</strong> &lt;${escapeHtml(
+                  data.currentUser.email
+                )}&gt;`
+              },
+              {
+                label: copy.globalRoles,
+                value: escapeHtml(formatList(data.currentUser.globalRoles, copy.none))
+              },
+              {
+                label: copy.tenantMemberships,
+                value: escapeHtml(tenantMemberships)
+              }
+            ],
+            { className: "action-card-facts-wide-labels" }
+          )}
         </div>
         <a class="button-link secondary" href="/inventory/export">${escapeHtml(
           copy.actionsDownloadYaml

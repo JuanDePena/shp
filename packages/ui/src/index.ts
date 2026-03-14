@@ -286,6 +286,10 @@ function renderBaseStyleBlock(): string {
         grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
       }
 
+      .filter-form-grid {
+        grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+      }
+
       .panel {
         padding: 1.15rem;
         border: 1px solid var(--line);
@@ -321,6 +325,14 @@ function renderBaseStyleBlock(): string {
       .detail-shell {
         display: grid;
         gap: 1rem;
+      }
+
+      .filter-shell {
+        gap: 0.85rem;
+      }
+
+      .filter-form-actions {
+        justify-content: flex-start;
       }
 
       .detail-grid {

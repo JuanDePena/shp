@@ -202,6 +202,9 @@ interface WebCopy {
   activeFiltersTitle: string;
   activeFiltersDescription: string;
   clearFiltersLabel: string;
+  applyFiltersLabel: string;
+  filterWorkspaceTitle: string;
+  filterWorkspaceDescription: string;
   filterStatusLabel: string;
   filterKindLabel: string;
   filterNodeLabel: string;
@@ -492,6 +495,10 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     activeFiltersTitle: "Active filters",
     activeFiltersDescription: "The current diagnostic slice applied to this workspace.",
     clearFiltersLabel: "Clear filters",
+    applyFiltersLabel: "Apply filters",
+    filterWorkspaceTitle: "Refine workspace",
+    filterWorkspaceDescription:
+      "Use structured filters to narrow the current operational slice before opening a specific record.",
     filterStatusLabel: "Status",
     filterKindLabel: "Kind",
     filterNodeLabel: "Node",
@@ -784,6 +791,10 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     activeFiltersTitle: "Filtros activos",
     activeFiltersDescription: "Corte diagnóstico actual aplicado a este workspace.",
     clearFiltersLabel: "Limpiar filtros",
+    applyFiltersLabel: "Aplicar filtros",
+    filterWorkspaceTitle: "Refinar workspace",
+    filterWorkspaceDescription:
+      "Usa filtros estructurados para acotar el corte operativo actual antes de abrir un registro específico.",
     filterStatusLabel: "Estado",
     filterKindLabel: "Tipo",
     filterNodeLabel: "Nodo",
@@ -2129,6 +2140,81 @@ function renderActiveFiltersPanel(
   </article>`;
 }
 
+function createUniqueSelectOptions(values: Array<string | undefined | null>): SelectOption[] {
+  const uniqueValues = Array.from(
+    new Set(
+      values
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value && value.length > 0))
+    )
+  ).sort((left, right) => left.localeCompare(right));
+
+  return uniqueValues.map((value) => ({ value, label: value }));
+}
+
+interface WorkspaceFilterField {
+  name: string;
+  label: string;
+  value?: string;
+  type?: "select" | "search";
+  options?: SelectOption[];
+  placeholder?: string;
+}
+
+function renderWorkspaceFilterForm(
+  copy: WebCopy,
+  props: {
+    view: DashboardView;
+    clearHref: string;
+    fields: WorkspaceFilterField[];
+  }
+): string {
+  return `<article class="panel detail-shell panel-nested filter-shell">
+    <div class="section-head">
+      <div>
+        <h3>${escapeHtml(copy.filterWorkspaceTitle)}</h3>
+        <p class="muted section-description">${escapeHtml(copy.filterWorkspaceDescription)}</p>
+      </div>
+      <a class="button-link secondary" href="${escapeHtml(props.clearHref)}">${escapeHtml(
+        copy.clearFiltersLabel
+      )}</a>
+    </div>
+    <form method="get" action="/" class="stack">
+      <input type="hidden" name="view" value="${escapeHtml(props.view)}" />
+      <div class="form-grid filter-form-grid">
+        ${props.fields
+          .map((field) => {
+            const fieldType = field.type ?? "select";
+
+            if (fieldType === "search") {
+              return `<label>${escapeHtml(field.label)}
+                <input
+                  type="search"
+                  name="${escapeHtml(field.name)}"
+                  value="${escapeHtml(field.value ?? "")}"
+                  placeholder="${escapeHtml(field.placeholder ?? copy.dataFilterPlaceholder)}"
+                />
+              </label>`;
+            }
+
+            return `<label>${escapeHtml(field.label)}
+              <select name="${escapeHtml(field.name)}">
+                ${renderSelectOptions(field.options ?? [], field.value, {
+                  allowBlank: true,
+                  blankLabel: copy.none
+                })}
+              </select>
+            </label>`;
+          })
+          .join("")}
+      </div>
+      <div class="toolbar filter-form-actions">
+        <button class="secondary" type="submit">${escapeHtml(copy.applyFiltersLabel)}</button>
+      </div>
+    </form>
+  </article>`;
+}
+
 function findLatestJobWithStatus(
   jobs: JobHistoryEntry[],
   status: JobHistoryEntry["status"]
@@ -3023,10 +3109,6 @@ function renderDesiredStateSection(
         }
       ]
     : [];
-  const desiredStateLatestImportSummary = data.inventory.latestImport
-    ? `${formatDate(data.inventory.latestImport.importedAt, locale)} · ${data.inventory.latestImport.sourcePath}`
-    : copy.never;
-
   const tenantDetailPanel = selectedTenant
     ? `<article class="panel detail-shell">
         <div class="section-head">
@@ -5176,6 +5258,10 @@ function renderDesiredStateSection(
     }
   ];
 
+  const desiredStateLatestImportSummary = data.inventory.latestImport
+    ? `${formatDate(data.inventory.latestImport.importedAt, locale)} · ${data.inventory.latestImport.sourcePath}`
+    : copy.never;
+
   const createPanelHtml = `<div class="stack">
       <article class="panel panel-muted detail-shell">
         <div class="section-head">
@@ -6003,6 +6089,115 @@ function renderDashboard(
     backupTenantFilter ? { label: copy.filterTenantLabel, value: backupTenantFilter } : undefined,
     backupPolicyFilter ? { label: copy.filterPolicyLabel, value: backupPolicyFilter } : undefined
   ].filter(Boolean) as Array<{ label: string; value: string }>;
+  const jobFilterForm = renderWorkspaceFilterForm(copy, {
+    view: "job-history",
+    clearHref: buildDashboardViewUrl("job-history"),
+    fields: [
+      {
+        name: "jobStatus",
+        label: copy.filterStatusLabel,
+        value: jobStatusFilter,
+        options: createUniqueSelectOptions(data.jobHistory.map((job) => job.status ?? "queued"))
+      },
+      {
+        name: "jobKind",
+        label: copy.filterKindLabel,
+        value: jobKindFilter,
+        options: createUniqueSelectOptions(data.jobHistory.map((job) => job.kind))
+      },
+      {
+        name: "jobNode",
+        label: copy.filterNodeLabel,
+        value: jobNodeFilter,
+        options: createUniqueSelectOptions([
+          ...data.jobHistory.map((job) => job.nodeId),
+          ...data.nodeHealth.map((node) => node.nodeId)
+        ])
+      },
+      {
+        name: "jobResource",
+        label: copy.filterResourceLabel,
+        type: "search",
+        value: jobResourceFilter,
+        placeholder: copy.filterResourceLabel
+      },
+      {
+        name: "auditType",
+        label: copy.filterEventLabel,
+        value: auditTypeFilter,
+        options: createUniqueSelectOptions(data.auditEvents.map((event) => event.eventType))
+      },
+      {
+        name: "auditEntity",
+        label: copy.filterEntityLabel,
+        type: "search",
+        value: auditEntityFilter,
+        placeholder: copy.filterEntityLabel
+      }
+    ]
+  });
+
+  const driftFilterForm = renderWorkspaceFilterForm(copy, {
+    view: "resource-drift",
+    clearHref: buildDashboardViewUrl("resource-drift"),
+    fields: [
+      {
+        name: "driftStatus",
+        label: copy.filterStatusLabel,
+        value: driftStatusFilter,
+        options: createUniqueSelectOptions(data.drift.map((entry) => entry.driftStatus))
+      },
+      {
+        name: "driftKind",
+        label: copy.filterKindLabel,
+        value: driftKindFilter,
+        options: createUniqueSelectOptions(data.drift.map((entry) => entry.resourceKind))
+      },
+      {
+        name: "driftNode",
+        label: copy.filterNodeLabel,
+        value: driftNodeFilter,
+        options: createUniqueSelectOptions([
+          ...data.drift.map((entry) => entry.nodeId),
+          ...data.nodeHealth.map((node) => node.nodeId)
+        ])
+      }
+    ]
+  });
+
+  const backupFilterForm = renderWorkspaceFilterForm(copy, {
+    view: "backups",
+    clearHref: buildDashboardViewUrl("backups"),
+    fields: [
+      {
+        name: "backupStatus",
+        label: copy.filterStatusLabel,
+        value: backupStatusFilter,
+        options: createUniqueSelectOptions(data.backups.latestRuns.map((run) => run.status))
+      },
+      {
+        name: "backupNode",
+        label: copy.filterNodeLabel,
+        value: backupNodeFilter,
+        options: createUniqueSelectOptions([
+          ...data.backups.latestRuns.map((run) => run.nodeId),
+          ...data.backups.policies.map((policy) => policy.targetNodeId)
+        ])
+      },
+      {
+        name: "backupTenant",
+        label: copy.filterTenantLabel,
+        value: backupTenantFilter,
+        options: createUniqueSelectOptions(data.backups.policies.map((policy) => policy.tenantSlug))
+      },
+      {
+        name: "backupPolicy",
+        label: copy.filterPolicyLabel,
+        value: backupPolicyFilter,
+        options: createUniqueSelectOptions(data.backups.policies.map((policy) => policy.policySlug))
+      }
+    ]
+  });
 
   const actionBar = `<div class="action-grid">
       <article class="action-card action-card-strong">
@@ -6024,34 +6219,44 @@ function renderDashboard(
       </article>
       <article class="action-card action-card-muted">
         <span class="action-eyebrow">${escapeHtml(copy.bootstrapInventoryTitle)}</span>
-        <h3>${escapeHtml(copy.bootstrapInventoryTitle)}</h3>
+        <h3>${escapeHtml(copy.actionsDownloadYaml)}</h3>
         <p class="muted">${escapeHtml(copy.bootstrapInventoryDescription)}</p>
         <div class="action-card-context">
-          <span class="action-card-context-title">${escapeHtml(copy.usersAndScope)}</span>
+          <span class="action-card-context-title">${escapeHtml(copy.latestImport)}</span>
           ${renderActionFacts(
             [
               {
-                label: copy.emailLabel,
-                value: `<strong>${escapeHtml(data.currentUser.displayName)}</strong> &lt;${escapeHtml(
-                  data.currentUser.email
-                )}&gt;`
+                label: copy.latestImport,
+                value: escapeHtml(
+                  data.inventory.latestImport
+                    ? `${formatDate(data.inventory.latestImport.importedAt, locale)} · ${data.inventory.latestImport.sourcePath}`
+                    : copy.never
+                )
               },
               {
-                label: copy.globalRoles,
-                value: escapeHtml(formatList(data.currentUser.globalRoles, copy.none))
-              },
-              {
-                label: copy.tenantMemberships,
-                value: escapeHtml(tenantMemberships)
+                label: copy.records,
+                value: escapeHtml(
+                  interpolateCopy(copy.latestImportCounts, {
+                    nodes: data.inventory.nodes.length,
+                    zones: data.inventory.zones.length,
+                    apps: data.inventory.apps.length,
+                    databases: data.inventory.databases.length
+                  })
+                )
               }
             ],
             { className: "action-card-facts-wide-labels" }
           )}
         </div>
         <p class="action-card-note">${escapeHtml(copy.dailyOperationsSourceNote)}</p>
-        <a class="button-link secondary" href="/inventory/export">${escapeHtml(
-          copy.actionsDownloadYaml
-        )}</a>
+        <div class="toolbar">
+          <a class="button-link secondary" href="/inventory/export">${escapeHtml(
+            copy.actionsDownloadYaml
+          )}</a>
+          <a class="button-link secondary" href="${escapeHtml(
+            buildDashboardViewUrl("desired-state", "desired-state-create")
+          )}">${escapeHtml(copy.openDesiredState)}</a>
+        </div>
       </article>
     </div>`;
 
@@ -6430,6 +6635,44 @@ function renderDashboard(
                   : escapeHtml(copy.none)
               },
               {
+                label: copy.filterStatusLabel,
+                value: `<a class="detail-link" href="${escapeHtml(
+                  buildDashboardViewUrl("job-history", undefined, undefined, {
+                    ...currentJobFilters,
+                    jobStatus: selectedJob.status ?? "queued"
+                  })
+                )}">${escapeHtml(selectedJob.status ?? "queued")}</a>`
+              },
+              {
+                label: copy.filterKindLabel,
+                value: `<a class="detail-link" href="${escapeHtml(
+                  buildDashboardViewUrl("job-history", undefined, undefined, {
+                    ...currentJobFilters,
+                    jobKind: selectedJob.kind
+                  })
+                )}">${escapeHtml(selectedJob.kind)}</a>`
+              },
+              {
+                label: copy.filterNodeLabel,
+                value: `<a class="detail-link mono" href="${escapeHtml(
+                  buildDashboardViewUrl("job-history", undefined, undefined, {
+                    ...currentJobFilters,
+                    jobNode: selectedJob.nodeId
+                  })
+                )}">${escapeHtml(selectedJob.nodeId)}</a>`
+              },
+              {
+                label: copy.filterResourceLabel,
+                value: selectedJob.resourceKey
+                  ? `<a class="detail-link mono" href="${escapeHtml(
+                      buildDashboardViewUrl("job-history", undefined, undefined, {
+                        ...currentJobFilters,
+                        jobResource: selectedJob.resourceKey
+                      })
+                    )}">${escapeHtml(selectedJob.resourceKey)}</a>`
+                  : escapeHtml(copy.none)
+              },
+              {
                 label: copy.jobColSummary,
                 value: escapeHtml(selectedJob.summary ?? "-")
               },
@@ -6583,6 +6826,33 @@ function renderDashboard(
             )}">${escapeHtml(selectedDrift.nodeId)}</a>`
           },
           {
+            label: copy.filterStatusLabel,
+            value: `<a class="detail-link" href="${escapeHtml(
+              buildDashboardViewUrl("resource-drift", undefined, undefined, {
+                ...currentDriftFilters,
+                driftStatus: selectedDrift.driftStatus
+              })
+            )}">${escapeHtml(selectedDrift.driftStatus)}</a>`
+          },
+          {
+            label: copy.filterKindLabel,
+            value: `<a class="detail-link" href="${escapeHtml(
+              buildDashboardViewUrl("resource-drift", undefined, undefined, {
+                ...currentDriftFilters,
+                driftKind: selectedDrift.resourceKind
+              })
+            )}">${escapeHtml(selectedDrift.resourceKind)}</a>`
+          },
+          {
+            label: copy.filterNodeLabel,
+            value: `<a class="detail-link mono" href="${escapeHtml(
+              buildDashboardViewUrl("resource-drift", undefined, undefined, {
+                ...currentDriftFilters,
+                driftNode: selectedDrift.nodeId
+              })
+            )}">${escapeHtml(selectedDrift.nodeId)}</a>`
+          },
+          {
             label: copy.jobColJob,
             value: selectedDrift.latestJobId
               ? `<a class="detail-link mono" href="${escapeHtml(
@@ -6657,6 +6927,46 @@ function renderDashboard(
             )}">${escapeHtml(copy.openNodeHealth)}</a>`
           }
         ])}
+        ${renderActionFacts([
+          {
+            label: copy.filterStatusLabel,
+            value: `<a class="detail-link" href="${escapeHtml(
+              buildDashboardViewUrl("backups", undefined, undefined, {
+                ...currentBackupFilters,
+                backupStatus: selectedBackupViewRun.status
+              })
+            )}">${escapeHtml(selectedBackupViewRun.status)}</a>`
+          },
+          {
+            label: copy.filterNodeLabel,
+            value: `<a class="detail-link mono" href="${escapeHtml(
+              buildDashboardViewUrl("backups", undefined, undefined, {
+                ...currentBackupFilters,
+                backupNode: selectedBackupViewRun.nodeId
+              })
+            )}">${escapeHtml(selectedBackupViewRun.nodeId)}</a>`
+          },
+          {
+            label: copy.filterPolicyLabel,
+            value: `<a class="detail-link mono" href="${escapeHtml(
+              buildDashboardViewUrl("backups", undefined, undefined, {
+                ...currentBackupFilters,
+                backupPolicy: selectedBackupViewRun.policySlug
+              })
+            )}">${escapeHtml(selectedBackupViewRun.policySlug)}</a>`
+          },
+          {
+            label: copy.filterTenantLabel,
+            value: selectedBackupPolicySummary
+              ? `<a class="detail-link" href="${escapeHtml(
+                  buildDashboardViewUrl("backups", undefined, undefined, {
+                    ...currentBackupFilters,
+                    backupTenant: selectedBackupPolicySummary.tenantSlug
+                  })
+                )}">${escapeHtml(selectedBackupPolicySummary.tenantSlug)}</a>`
+              : escapeHtml(copy.none)
+          }
+        ])}
         <div class="toolbar">
           <a class="button-link secondary" href="${escapeHtml(
             buildDashboardViewUrl("desired-state", "desired-state-backups", selectedBackupViewRun.policySlug)
@@ -6727,6 +7037,35 @@ function renderDashboard(
                       : "muted"
                 )
               : renderPill(copy.none, "muted")
+          }
+        ])}
+        ${renderActionFacts([
+          {
+            label: copy.filterPolicyLabel,
+            value: `<a class="detail-link mono" href="${escapeHtml(
+              buildDashboardViewUrl("backups", undefined, undefined, {
+                ...currentBackupFilters,
+                backupPolicy: selectedBackupPolicySummary.policySlug
+              })
+            )}">${escapeHtml(selectedBackupPolicySummary.policySlug)}</a>`
+          },
+          {
+            label: copy.filterTenantLabel,
+            value: `<a class="detail-link" href="${escapeHtml(
+              buildDashboardViewUrl("backups", undefined, undefined, {
+                ...currentBackupFilters,
+                backupTenant: selectedBackupPolicySummary.tenantSlug
+              })
+            )}">${escapeHtml(selectedBackupPolicySummary.tenantSlug)}</a>`
+          },
+          {
+            label: copy.filterNodeLabel,
+            value: `<a class="detail-link mono" href="${escapeHtml(
+              buildDashboardViewUrl("backups", undefined, undefined, {
+                ...currentBackupFilters,
+                backupNode: selectedBackupPolicySummary.targetNodeId
+              })
+            )}">${escapeHtml(selectedBackupPolicySummary.targetNodeId)}</a>`
           }
         ])}
         ${renderRelatedPanel(
@@ -7379,6 +7718,7 @@ function renderDashboard(
       { label: copy.driftOutOfSync, value: String(driftOutOfSyncCount), tone: driftOutOfSyncCount > 0 ? "danger" : "success" },
       { label: copy.driftMissingSecrets, value: String(driftMissingSecretCount), tone: driftMissingSecretCount > 0 ? "danger" : "success" }
     ])}
+    ${driftFilterForm}
     ${driftActiveFiltersPanel}
     ${renderDataTable({
       id: "section-resource-drift-table",
@@ -7424,6 +7764,7 @@ function renderDashboard(
       { label: "db reconcile", value: String(databaseReconcileJobCount), tone: databaseReconcileJobCount > 0 ? "muted" : "success" },
       { label: "backup.trigger", value: String(backupTriggerJobCount), tone: backupTriggerJobCount > 0 ? "muted" : "success" }
     ])}
+    ${jobFilterForm}
     ${jobActiveFiltersPanel}
     ${renderDataTable({
       id: "section-job-history-table",
@@ -7480,6 +7821,7 @@ function renderDashboard(
       { label: copy.failedBackups, value: String(backupFailedCount), tone: backupFailedCount > 0 ? "danger" : "success" },
       { label: copy.policyCoverage, value: String(backupCoverageCount), tone: backupCoverageCount > 0 ? "success" : "muted" }
     ])}
+    ${backupFilterForm}
     ${backupActiveFiltersPanel}
     ${renderDataTable({
       id: "section-backups-table",

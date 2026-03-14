@@ -1089,7 +1089,7 @@ ${renderBaseStyleBlock()}
 
       .profile-facts {
         display: grid;
-        grid-template-columns: 9.25rem minmax(0, 1fr);
+        grid-template-columns: 13rem minmax(0, 1fr);
         gap: 0.5rem 0.9rem;
         margin: 0;
         align-items: start;

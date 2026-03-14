@@ -187,14 +187,29 @@ interface WebCopy {
   backupTargetPostureDescription: string;
   backupRunSignalsTitle: string;
   backupRunSignalsDescription: string;
+  backupNodesTitle: string;
+  backupNodesDescription: string;
   jobNodesTitle: string;
   jobNodesDescription: string;
   jobKindsTitle: string;
   jobKindsDescription: string;
+  driftStatusesTitle: string;
+  driftStatusesDescription: string;
   driftNodesTitle: string;
   driftNodesDescription: string;
   driftKindsTitle: string;
   driftKindsDescription: string;
+  activeFiltersTitle: string;
+  activeFiltersDescription: string;
+  clearFiltersLabel: string;
+  filterStatusLabel: string;
+  filterKindLabel: string;
+  filterNodeLabel: string;
+  filterResourceLabel: string;
+  filterPolicyLabel: string;
+  filterTenantLabel: string;
+  filterEventLabel: string;
+  filterEntityLabel: string;
   relatedJobsTitle: string;
   relatedDriftTitle: string;
   relatedResourcesTitle: string;
@@ -462,14 +477,29 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
       "Current target-node health, selected policy spread and latest known outcomes.",
     backupRunSignalsTitle: "Backup run signals",
     backupRunSignalsDescription: "Recent backup mix by node and outcome.",
+    backupNodesTitle: "Backup activity by node",
+    backupNodesDescription: "Nodes receiving the most recent backup activity.",
     jobNodesTitle: "Job activity by node",
     jobNodesDescription: "Recent dispatch concentration and latest status by node.",
     jobKindsTitle: "Job kind mix",
     jobKindsDescription: "Recent workload mix and most active job kinds.",
+    driftStatusesTitle: "Drift by status",
+    driftStatusesDescription: "Current drift split by status for the selected slice.",
     driftNodesTitle: "Drift by node",
     driftNodesDescription: "Nodes accumulating the most unresolved drift.",
     driftKindsTitle: "Drift by kind",
     driftKindsDescription: "Which resource families are currently drifting the most.",
+    activeFiltersTitle: "Active filters",
+    activeFiltersDescription: "The current diagnostic slice applied to this workspace.",
+    clearFiltersLabel: "Clear filters",
+    filterStatusLabel: "Status",
+    filterKindLabel: "Kind",
+    filterNodeLabel: "Node",
+    filterResourceLabel: "Resource",
+    filterPolicyLabel: "Policy",
+    filterTenantLabel: "Tenant",
+    filterEventLabel: "Event type",
+    filterEntityLabel: "Entity",
     relatedJobsTitle: "Related jobs",
     relatedDriftTitle: "Related drift",
     relatedResourcesTitle: "Related resources",
@@ -739,14 +769,29 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
       "Salud actual del nodo destino, alcance de la política seleccionada y últimos resultados conocidos.",
     backupRunSignalsTitle: "Señales de ejecuciones de backup",
     backupRunSignalsDescription: "Mezcla reciente de backups por nodo y resultado.",
+    backupNodesTitle: "Actividad de backups por nodo",
+    backupNodesDescription: "Nodos que reciben más actividad reciente de backup.",
     jobNodesTitle: "Actividad de jobs por nodo",
     jobNodesDescription: "Concentración reciente de despachos y último estado por nodo.",
     jobKindsTitle: "Mezcla de tipos de job",
     jobKindsDescription: "Carga reciente y tipos de job más activos.",
+    driftStatusesTitle: "Drift por estado",
+    driftStatusesDescription: "Reparto actual del drift por estado dentro del corte seleccionado.",
     driftNodesTitle: "Drift por nodo",
     driftNodesDescription: "Nodos que acumulan más drift sin resolver.",
     driftKindsTitle: "Drift por tipo",
     driftKindsDescription: "Familias de recursos con mayor drift actual.",
+    activeFiltersTitle: "Filtros activos",
+    activeFiltersDescription: "Corte diagnóstico actual aplicado a este workspace.",
+    clearFiltersLabel: "Limpiar filtros",
+    filterStatusLabel: "Estado",
+    filterKindLabel: "Tipo",
+    filterNodeLabel: "Nodo",
+    filterResourceLabel: "Recurso",
+    filterPolicyLabel: "Política",
+    filterTenantLabel: "Tenant",
+    filterEventLabel: "Tipo de evento",
+    filterEntityLabel: "Entidad",
     relatedJobsTitle: "Jobs relacionados",
     relatedDriftTitle: "Drift relacionado",
     relatedResourcesTitle: "Recursos relacionados",
@@ -1063,10 +1108,16 @@ function normalizeDashboardFocus(value: string | null | undefined): string | und
   return normalized ? normalized : undefined;
 }
 
+function normalizeFilterValue(value: string | null | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+}
+
 function buildDashboardViewUrl(
   view: DashboardView,
   tab?: DesiredStateTabId,
-  focus?: string
+  focus?: string,
+  filters: Record<string, string | undefined> = {}
 ): string {
   const search = new URLSearchParams();
 
@@ -1080,6 +1131,12 @@ function buildDashboardViewUrl(
 
   if (view !== "overview" && focus) {
     search.set("focus", focus);
+  }
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) {
+      search.set(key, value);
+    }
   }
 
   const query = search.toString();
@@ -2046,6 +2103,29 @@ function renderRelatedPanel(
       </div>
     </div>
     ${renderFeedList(items, emptyMessage)}
+  </article>`;
+}
+
+function renderActiveFiltersPanel(
+  copy: WebCopy,
+  items: Array<{ label: string; value: string }>,
+  clearHref: string
+): string {
+  if (items.length === 0) {
+    return "";
+  }
+
+  return `<article class="panel detail-shell panel-nested">
+    <div class="section-head">
+      <div>
+        <h3>${escapeHtml(copy.activeFiltersTitle)}</h3>
+        <p class="muted section-description">${escapeHtml(copy.activeFiltersDescription)}</p>
+      </div>
+      <a class="button-link secondary" href="${escapeHtml(clearHref)}">${escapeHtml(
+        copy.clearFiltersLabel
+      )}</a>
+    </div>
+    ${renderActionFacts(items)}
   </article>`;
 }
 
@@ -5380,6 +5460,134 @@ function renderDashboard(
   notice?: PanelNotice
 ): string {
   const copy = copyByLocale[locale];
+  const currentUrl = new URL(`http://localhost${currentPath}`);
+  const jobStatusFilter = normalizeFilterValue(currentUrl.searchParams.get("jobStatus"));
+  const jobKindFilter = normalizeFilterValue(currentUrl.searchParams.get("jobKind"));
+  const jobNodeFilter = normalizeFilterValue(currentUrl.searchParams.get("jobNode"));
+  const jobResourceFilter = normalizeFilterValue(currentUrl.searchParams.get("jobResource"));
+  const auditTypeFilter = normalizeFilterValue(currentUrl.searchParams.get("auditType"));
+  const auditEntityFilter = normalizeFilterValue(currentUrl.searchParams.get("auditEntity"));
+  const driftStatusFilter = normalizeFilterValue(currentUrl.searchParams.get("driftStatus"));
+  const driftKindFilter = normalizeFilterValue(currentUrl.searchParams.get("driftKind"));
+  const driftNodeFilter = normalizeFilterValue(currentUrl.searchParams.get("driftNode"));
+  const backupStatusFilter = normalizeFilterValue(currentUrl.searchParams.get("backupStatus"));
+  const backupNodeFilter = normalizeFilterValue(currentUrl.searchParams.get("backupNode"));
+  const backupTenantFilter = normalizeFilterValue(currentUrl.searchParams.get("backupTenant"));
+  const backupPolicyFilter = normalizeFilterValue(currentUrl.searchParams.get("backupPolicy"));
+  const backupPoliciesBySlug = new Map(
+    data.backups.policies.map((policy) => [policy.policySlug, policy] as const)
+  );
+  const filteredJobHistory = data.jobHistory.filter((job) => {
+    if (jobStatusFilter && (job.status ?? "queued") !== jobStatusFilter) {
+      return false;
+    }
+
+    if (jobKindFilter && job.kind !== jobKindFilter) {
+      return false;
+    }
+
+    if (jobNodeFilter && job.nodeId !== jobNodeFilter) {
+      return false;
+    }
+
+    if (jobResourceFilter && job.resourceKey !== jobResourceFilter) {
+      return false;
+    }
+
+    return true;
+  });
+  const filteredAuditEvents = data.auditEvents.filter((event) => {
+    if (auditTypeFilter && event.eventType !== auditTypeFilter) {
+      return false;
+    }
+
+    if (
+      auditEntityFilter &&
+      ![
+        event.entityType ? `${event.entityType}:${event.entityId ?? ""}` : "",
+        event.entityType ?? "",
+        event.entityId ?? "",
+        event.actorId ?? ""
+      ]
+        .filter(Boolean)
+        .includes(auditEntityFilter) &&
+      !payloadContainsValue(event.payload, auditEntityFilter)
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+  const filteredDrift = data.drift.filter((entry) => {
+    if (driftStatusFilter && entry.driftStatus !== driftStatusFilter) {
+      return false;
+    }
+
+    if (driftKindFilter && entry.resourceKind !== driftKindFilter) {
+      return false;
+    }
+
+    if (driftNodeFilter && entry.nodeId !== driftNodeFilter) {
+      return false;
+    }
+
+    return true;
+  });
+  const filteredBackupPolicies = data.backups.policies.filter((policy) => {
+    if (backupTenantFilter && policy.tenantSlug !== backupTenantFilter) {
+      return false;
+    }
+
+    if (backupNodeFilter && policy.targetNodeId !== backupNodeFilter) {
+      return false;
+    }
+
+    if (backupPolicyFilter && policy.policySlug !== backupPolicyFilter) {
+      return false;
+    }
+
+    return true;
+  });
+  const filteredBackupRuns = data.backups.latestRuns.filter((run) => {
+    const policy = backupPoliciesBySlug.get(run.policySlug);
+
+    if (backupStatusFilter && run.status !== backupStatusFilter) {
+      return false;
+    }
+
+    if (backupNodeFilter && run.nodeId !== backupNodeFilter) {
+      return false;
+    }
+
+    if (backupPolicyFilter && run.policySlug !== backupPolicyFilter) {
+      return false;
+    }
+
+    if (backupTenantFilter && policy?.tenantSlug !== backupTenantFilter) {
+      return false;
+    }
+
+    return true;
+  });
+  const currentJobFilters = {
+    jobStatus: jobStatusFilter,
+    jobKind: jobKindFilter,
+    jobNode: jobNodeFilter,
+    jobResource: jobResourceFilter,
+    auditType: auditTypeFilter,
+    auditEntity: auditEntityFilter
+  };
+  const currentDriftFilters = {
+    driftStatus: driftStatusFilter,
+    driftKind: driftKindFilter,
+    driftNode: driftNodeFilter
+  };
+  const currentBackupFilters = {
+    backupStatus: backupStatusFilter,
+    backupNode: backupNodeFilter,
+    backupTenant: backupTenantFilter,
+    backupPolicy: backupPolicyFilter
+  };
   const selectedNodeHealth =
     view === "node-health"
       ? data.nodeHealth.find((node) => node.nodeId === focus) ?? data.nodeHealth[0]
@@ -5420,14 +5628,14 @@ function renderDashboard(
 
   const selectedDrift =
     view === "resource-drift"
-      ? data.drift.find((entry) => entry.resourceKey === focus) ?? data.drift[0]
+      ? filteredDrift.find((entry) => entry.resourceKey === focus) ?? filteredDrift[0] ?? data.drift[0]
       : undefined;
-  const driftRows: DataTableRow[] = data.drift.map((entry) => ({
+  const driftRows: DataTableRow[] = filteredDrift.map((entry) => ({
     cells: [
       escapeHtml(entry.resourceKind),
       renderFocusLink(
         entry.resourceKey,
-        buildDashboardViewUrl("resource-drift", undefined, entry.resourceKey),
+        buildDashboardViewUrl("resource-drift", undefined, entry.resourceKey, currentDriftFilters),
         selectedDrift?.resourceKey === entry.resourceKey,
         copy.selectedStateLabel
       ),
@@ -5459,13 +5667,13 @@ function renderDashboard(
 
   const selectedJob =
     view === "job-history"
-      ? data.jobHistory.find((job) => job.jobId === focus) ?? data.jobHistory[0]
+      ? filteredJobHistory.find((job) => job.jobId === focus) ?? filteredJobHistory[0] ?? data.jobHistory[0]
       : undefined;
-  const jobRows: DataTableRow[] = data.jobHistory.map((job) => ({
+  const jobRows: DataTableRow[] = filteredJobHistory.map((job) => ({
     cells: [
       renderFocusLink(
         job.jobId,
-        buildDashboardViewUrl("job-history", undefined, job.jobId),
+        buildDashboardViewUrl("job-history", undefined, job.jobId, currentJobFilters),
         selectedJob?.jobId === job.jobId,
         copy.selectedStateLabel
       ),
@@ -5498,15 +5706,15 @@ function renderDashboard(
 
   const selectedBackupViewRun =
     view === "backups"
-      ? data.backups.latestRuns.find(
+      ? filteredBackupRuns.find(
           (run) => run.policySlug === focus || run.runId === focus
-        ) ?? data.backups.latestRuns[0]
+        ) ?? filteredBackupRuns[0] ?? data.backups.latestRuns[0]
       : undefined;
-  const backupRows: DataTableRow[] = data.backups.latestRuns.map((run) => ({
+  const backupRows: DataTableRow[] = filteredBackupRuns.map((run) => ({
     cells: [
       renderFocusLink(
         run.policySlug,
-        buildDashboardViewUrl("backups", undefined, run.policySlug),
+        buildDashboardViewUrl("backups", undefined, run.policySlug, currentBackupFilters),
         selectedBackupViewRun?.policySlug === run.policySlug,
         copy.selectedStateLabel
       ),
@@ -5564,24 +5772,24 @@ function renderDashboard(
     const stale = Number.isFinite(lastSeenAt) && now - lastSeenAt > staleThresholdMs;
     return !stale && node.pendingJobCount === 0 && node.latestJobStatus !== "failed";
   }).length;
-  const driftPendingCount = data.drift.filter((entry) => entry.driftStatus === "pending").length;
-  const driftOutOfSyncCount = data.drift.filter((entry) => entry.driftStatus === "out_of_sync").length;
-  const driftMissingSecretCount = data.drift.filter(
+  const driftPendingCount = filteredDrift.filter((entry) => entry.driftStatus === "pending").length;
+  const driftOutOfSyncCount = filteredDrift.filter((entry) => entry.driftStatus === "out_of_sync").length;
+  const driftMissingSecretCount = filteredDrift.filter(
     (entry) => entry.driftStatus === "missing_secret"
   ).length;
-  const queuedJobCount = data.jobHistory.filter((job) => !job.status).length;
-  const appliedJobCount = data.jobHistory.filter((job) => job.status === "applied").length;
-  const failedJobCount = data.jobHistory.filter((job) => job.status === "failed").length;
-  const backupSucceededCount = data.backups.latestRuns.filter((run) => run.status === "succeeded").length;
-  const backupFailedCount = data.backups.latestRuns.filter((run) => run.status === "failed").length;
-  const backupRunningCount = data.backups.latestRuns.filter((run) => run.status === "running").length;
-  const backupCoverageCount = data.backups.policies.length;
-  const dnsSyncJobCount = data.jobHistory.filter((job) => job.kind === "dns.sync").length;
-  const proxyRenderJobCount = data.jobHistory.filter((job) => job.kind === "proxy.render").length;
-  const databaseReconcileJobCount = data.jobHistory.filter(
+  const queuedJobCount = filteredJobHistory.filter((job) => !job.status).length;
+  const appliedJobCount = filteredJobHistory.filter((job) => job.status === "applied").length;
+  const failedJobCount = filteredJobHistory.filter((job) => job.status === "failed").length;
+  const backupSucceededCount = filteredBackupRuns.filter((run) => run.status === "succeeded").length;
+  const backupFailedCount = filteredBackupRuns.filter((run) => run.status === "failed").length;
+  const backupRunningCount = filteredBackupRuns.filter((run) => run.status === "running").length;
+  const backupCoverageCount = filteredBackupPolicies.length;
+  const dnsSyncJobCount = filteredJobHistory.filter((job) => job.kind === "dns.sync").length;
+  const proxyRenderJobCount = filteredJobHistory.filter((job) => job.kind === "proxy.render").length;
+  const databaseReconcileJobCount = filteredJobHistory.filter(
     (job) => job.kind === "postgres.reconcile" || job.kind === "mariadb.reconcile"
   ).length;
-  const backupTriggerJobCount = data.jobHistory.filter((job) => job.kind === "backup.trigger").length;
+  const backupTriggerJobCount = filteredJobHistory.filter((job) => job.kind === "backup.trigger").length;
 
   const selectedNodeDrift = selectedNodeHealth
     ? data.drift.filter((entry) => entry.nodeId === selectedNodeHealth.nodeId)
@@ -5646,9 +5854,13 @@ function renderDashboard(
       )
     : [];
   const selectedBackupPolicySummary = selectedBackupViewRun
-    ? data.backups.policies.find((policy) => policy.policySlug === selectedBackupViewRun.policySlug)
+    ? filteredBackupPolicies.find((policy) => policy.policySlug === selectedBackupViewRun.policySlug) ??
+      data.backups.policies.find((policy) => policy.policySlug === selectedBackupViewRun.policySlug)
     : view === "backups"
-      ? data.backups.policies.find((policy) => policy.policySlug === focus) ?? data.backups.policies[0]
+      ? filteredBackupPolicies.find((policy) => policy.policySlug === focus) ??
+        filteredBackupPolicies[0] ??
+        data.backups.policies.find((policy) => policy.policySlug === focus) ??
+        data.backups.policies[0]
       : undefined;
   const selectedBackupAuditEvents = selectedBackupViewRun || selectedBackupPolicySummary
     ? findRelatedAuditEvents(
@@ -5721,38 +5933,39 @@ function renderDashboard(
         }
       ]
     : [];
-  const failedJobFocus = data.jobHistory.filter((job) => job.status === "failed").slice(0, 6);
-  const jobNodeGroups = groupItemsBy(data.jobHistory, (job) => job.nodeId).slice(0, 6);
-  const jobKindGroups = groupItemsBy(data.jobHistory, (job) => job.kind).slice(0, 6);
-  const jobStatusGroups = groupItemsBy(data.jobHistory, (job) => job.status ?? "queued").slice(0, 4);
+  const failedJobFocus = filteredJobHistory.filter((job) => job.status === "failed").slice(0, 6);
+  const jobNodeGroups = groupItemsBy(filteredJobHistory, (job) => job.nodeId).slice(0, 6);
+  const jobKindGroups = groupItemsBy(filteredJobHistory, (job) => job.kind).slice(0, 6);
+  const jobStatusGroups = groupItemsBy(filteredJobHistory, (job) => job.status ?? "queued").slice(0, 4);
   const jobResourceGroups = groupItemsBy(
-    data.jobHistory.filter((job) => Boolean(job.resourceKey)),
+    filteredJobHistory.filter((job) => Boolean(job.resourceKey)),
     (job) => job.resourceKey ?? "unscoped"
   ).slice(0, 6);
-  const auditEventGroups = groupItemsBy(data.auditEvents, (event) => event.eventType).slice(0, 6);
+  const auditEventGroups = groupItemsBy(filteredAuditEvents, (event) => event.eventType).slice(0, 6);
   const auditActorGroups = groupItemsBy(
-    data.auditEvents,
+    filteredAuditEvents,
     (event) => `${event.actorType}:${event.actorId ?? "unknown"}`
   ).slice(0, 6);
   const auditEntityGroups = groupItemsBy(
-    data.auditEvents.filter((event) => Boolean(event.entityType || event.entityId)),
+    filteredAuditEvents.filter((event) => Boolean(event.entityType || event.entityId)),
     (event) => event.entityType && event.entityId ? `${event.entityType}:${event.entityId}` : event.entityType ?? event.entityId ?? "unknown"
   ).slice(0, 6);
-  const driftNodeGroups = groupItemsBy(data.drift, (entry) => entry.nodeId).slice(0, 6);
-  const driftKindGroups = groupItemsBy(data.drift, (entry) => entry.resourceKind).slice(0, 6);
-  const backupLatestSuccessRun = data.backups.latestRuns.find((run) => run.status === "succeeded");
-  const backupLatestFailedRun = data.backups.latestRuns.find((run) => run.status === "failed");
+  const driftStatusGroups = groupItemsBy(filteredDrift, (entry) => entry.driftStatus).slice(0, 4);
+  const driftNodeGroups = groupItemsBy(filteredDrift, (entry) => entry.nodeId).slice(0, 6);
+  const driftKindGroups = groupItemsBy(filteredDrift, (entry) => entry.resourceKind).slice(0, 6);
+  const backupLatestSuccessRun = filteredBackupRuns.find((run) => run.status === "succeeded");
+  const backupLatestFailedRun = filteredBackupRuns.find((run) => run.status === "failed");
   const backupCoveredTenantCount = new Set(
-    data.backups.policies.map((policy) => policy.tenantSlug)
+    filteredBackupPolicies.map((policy) => policy.tenantSlug)
   ).size;
   const backupTargetNodeCount = new Set(
-    data.backups.policies.map((policy) => policy.targetNodeId)
+    filteredBackupPolicies.map((policy) => policy.targetNodeId)
   ).size;
-  const backupNodeGroups = groupItemsBy(data.backups.latestRuns, (run) => run.nodeId).slice(0, 6);
-  const backupStatusGroups = groupItemsBy(data.backups.latestRuns, (run) => run.status).slice(0, 4);
-  const backupTenantGroups = groupItemsBy(data.backups.policies, (policy) => policy.tenantSlug).slice(0, 6);
-  const backupPolicyGroups = groupItemsBy(data.backups.latestRuns, (run) => run.policySlug).slice(0, 6);
-  const backupPolicyPreviewItems = data.backups.policies.slice(0, 6).map((policy) => ({
+  const backupNodeGroups = groupItemsBy(filteredBackupRuns, (run) => run.nodeId).slice(0, 6);
+  const backupStatusGroups = groupItemsBy(filteredBackupRuns, (run) => run.status).slice(0, 4);
+  const backupTenantGroups = groupItemsBy(filteredBackupPolicies, (policy) => policy.tenantSlug).slice(0, 6);
+  const backupPolicyGroups = groupItemsBy(filteredBackupRuns, (run) => run.policySlug).slice(0, 6);
+  const backupPolicyPreviewItems = filteredBackupPolicies.slice(0, 6).map((policy) => ({
     title: `<a class="detail-link" href="${escapeHtml(
       buildDashboardViewUrl("backups", undefined, policy.policySlug)
     )}">${escapeHtml(policy.policySlug)}</a>`,
@@ -5760,7 +5973,7 @@ function renderDashboard(
     summary: escapeHtml(`${policy.schedule} · ${policy.retentionDays}d retention`),
     tone: "default" as const
   }));
-  const backupFailureItems = data.backups.latestRuns
+  const backupFailureItems = filteredBackupRuns
     .filter((run) => run.status === "failed")
     .slice(0, 6)
     .map((run) => ({
@@ -5771,6 +5984,25 @@ function renderDashboard(
       summary: escapeHtml(run.summary),
       tone: "danger" as const
     }));
+  const activeJobFilterItems = [
+    jobStatusFilter ? { label: copy.filterStatusLabel, value: jobStatusFilter } : undefined,
+    jobKindFilter ? { label: copy.filterKindLabel, value: jobKindFilter } : undefined,
+    jobNodeFilter ? { label: copy.filterNodeLabel, value: jobNodeFilter } : undefined,
+    jobResourceFilter ? { label: copy.filterResourceLabel, value: jobResourceFilter } : undefined,
+    auditTypeFilter ? { label: copy.filterEventLabel, value: auditTypeFilter } : undefined,
+    auditEntityFilter ? { label: copy.filterEntityLabel, value: auditEntityFilter } : undefined
+  ].filter(Boolean) as Array<{ label: string; value: string }>;
+  const activeDriftFilterItems = [
+    driftStatusFilter ? { label: copy.filterStatusLabel, value: driftStatusFilter } : undefined,
+    driftKindFilter ? { label: copy.filterKindLabel, value: driftKindFilter } : undefined,
+    driftNodeFilter ? { label: copy.filterNodeLabel, value: driftNodeFilter } : undefined
+  ].filter(Boolean) as Array<{ label: string; value: string }>;
+  const activeBackupFilterItems = [
+    backupStatusFilter ? { label: copy.filterStatusLabel, value: backupStatusFilter } : undefined,
+    backupNodeFilter ? { label: copy.filterNodeLabel, value: backupNodeFilter } : undefined,
+    backupTenantFilter ? { label: copy.filterTenantLabel, value: backupTenantFilter } : undefined,
+    backupPolicyFilter ? { label: copy.filterPolicyLabel, value: backupPolicyFilter } : undefined
+  ].filter(Boolean) as Array<{ label: string; value: string }>;
 
   const actionBar = `<div class="action-grid">
       <article class="action-card action-card-strong">
@@ -6611,7 +6843,12 @@ function renderDashboard(
     copy.auditSignalsTitle,
     copy.auditSignalsDescription,
     auditEventGroups.map((group) => ({
-      title: escapeHtml(group.key),
+      title: `<a class="detail-link" href="${escapeHtml(
+        buildDashboardViewUrl("job-history", undefined, undefined, {
+          ...currentJobFilters,
+          auditType: group.key
+        })
+      )}">${escapeHtml(group.key)}</a>`,
       meta: escapeHtml(`${group.items.length} event(s)`),
       summary: escapeHtml(
         group.items
@@ -6628,7 +6865,12 @@ function renderDashboard(
     copy.auditActorsTitle,
     copy.auditActorsDescription,
     auditActorGroups.map((group) => ({
-      title: escapeHtml(group.key),
+      title: `<a class="detail-link" href="${escapeHtml(
+        buildDashboardViewUrl("job-history", undefined, undefined, {
+          ...currentJobFilters,
+          auditEntity: group.key
+        })
+      )}">${escapeHtml(group.key)}</a>`,
       meta: escapeHtml(`${group.items.length} event(s)`),
       summary: escapeHtml(
         group.items
@@ -6645,7 +6887,12 @@ function renderDashboard(
     copy.auditEntitiesTitle,
     copy.auditEntitiesDescription,
     auditEntityGroups.map((group) => ({
-      title: escapeHtml(group.key),
+      title: `<a class="detail-link" href="${escapeHtml(
+        buildDashboardViewUrl("job-history", undefined, undefined, {
+          ...currentJobFilters,
+          auditEntity: group.key
+        })
+      )}">${escapeHtml(group.key)}</a>`,
       meta: escapeHtml(`${group.items.length} event(s)`),
       summary: escapeHtml(
         group.items
@@ -6663,7 +6910,10 @@ function renderDashboard(
     copy.jobNodesDescription,
     jobNodeGroups.map((group) => ({
       title: `<a class="detail-link mono" href="${escapeHtml(
-        buildDashboardViewUrl("node-health", undefined, group.key)
+        buildDashboardViewUrl("job-history", undefined, undefined, {
+          ...currentJobFilters,
+          jobNode: group.key
+        })
       )}">${escapeHtml(group.key)}</a>`,
       meta: escapeHtml(`${group.items.length} job(s)`),
       summary: escapeHtml(summarizeGroupStatuses(group.items)),
@@ -6680,7 +6930,12 @@ function renderDashboard(
     copy.jobKindsTitle,
     copy.jobKindsDescription,
     jobKindGroups.map((group) => ({
-      title: escapeHtml(group.key),
+      title: `<a class="detail-link" href="${escapeHtml(
+        buildDashboardViewUrl("job-history", undefined, undefined, {
+          ...currentJobFilters,
+          jobKind: group.key
+        })
+      )}">${escapeHtml(group.key)}</a>`,
       meta: escapeHtml(`${group.items.length} job(s)`),
       summary: escapeHtml(summarizeGroupStatuses(group.items)),
       tone: group.items.some((job) => job.status === "failed")
@@ -6696,7 +6951,12 @@ function renderDashboard(
     copy.jobStatusesTitle,
     copy.jobStatusesDescription,
     jobStatusGroups.map((group) => ({
-      title: escapeHtml(group.key),
+      title: `<a class="detail-link" href="${escapeHtml(
+        buildDashboardViewUrl("job-history", undefined, undefined, {
+          ...currentJobFilters,
+          jobStatus: group.key
+        })
+      )}">${escapeHtml(group.key)}</a>`,
       meta: escapeHtml(`${group.items.length} job(s)`),
       summary: escapeHtml(
         group.items
@@ -6719,7 +6979,10 @@ function renderDashboard(
     copy.jobResourceHotspotsDescription,
     jobResourceGroups.map((group) => ({
       title: `<a class="detail-link mono" href="${escapeHtml(
-        buildDashboardViewUrl("resource-drift", undefined, group.key)
+        buildDashboardViewUrl("job-history", undefined, undefined, {
+          ...currentJobFilters,
+          jobResource: group.key
+        })
       )}">${escapeHtml(group.key)}</a>`,
       meta: escapeHtml(`${group.items.length} job(s)`),
       summary: escapeHtml(summarizeGroupStatuses(group.items)),
@@ -6732,12 +6995,48 @@ function renderDashboard(
     copy.noJobs
   );
 
+  const jobActiveFiltersPanel = renderActiveFiltersPanel(
+    copy,
+    activeJobFilterItems,
+    buildDashboardViewUrl("job-history")
+  );
+
+  const driftStatusesPanel = renderRelatedPanel(
+    copy.driftStatusesTitle,
+    copy.driftStatusesDescription,
+    driftStatusGroups.map((group) => ({
+      title: `<a class="detail-link" href="${escapeHtml(
+        buildDashboardViewUrl("resource-drift", undefined, undefined, {
+          ...currentDriftFilters,
+          driftStatus: group.key
+        })
+      )}">${escapeHtml(group.key)}</a>`,
+      meta: escapeHtml(`${group.items.length} drift item(s)`),
+      summary: escapeHtml(
+        group.items
+          .slice(0, 2)
+          .map((entry) => `${entry.resourceKind} · ${entry.nodeId}`)
+          .join(" · ")
+      ),
+      tone:
+        group.key === "out_of_sync" || group.key === "missing_secret"
+          ? ("danger" as const)
+          : group.key === "in_sync"
+            ? ("success" as const)
+            : ("default" as const)
+    })),
+    copy.noDrift
+  );
+
   const driftNodesPanel = renderRelatedPanel(
     copy.driftNodesTitle,
     copy.driftNodesDescription,
     driftNodeGroups.map((group) => ({
       title: `<a class="detail-link mono" href="${escapeHtml(
-        buildDashboardViewUrl("node-health", undefined, group.key)
+        buildDashboardViewUrl("resource-drift", undefined, undefined, {
+          ...currentDriftFilters,
+          driftNode: group.key
+        })
       )}">${escapeHtml(group.key)}</a>`,
       meta: escapeHtml(`${group.items.length} drift item(s)`),
       summary: escapeHtml(
@@ -6758,7 +7057,12 @@ function renderDashboard(
     copy.driftKindsTitle,
     copy.driftKindsDescription,
     driftKindGroups.map((group) => ({
-      title: escapeHtml(group.key),
+      title: `<a class="detail-link" href="${escapeHtml(
+        buildDashboardViewUrl("resource-drift", undefined, undefined, {
+          ...currentDriftFilters,
+          driftKind: group.key
+        })
+      )}">${escapeHtml(group.key)}</a>`,
       meta: escapeHtml(`${group.items.length} drift item(s)`),
       summary: escapeHtml(
         groupItemsBy(group.items, (entry) => entry.driftStatus)
@@ -6772,6 +7076,12 @@ function renderDashboard(
           : ("success" as const)
     })),
     copy.noDrift
+  );
+
+  const driftActiveFiltersPanel = renderActiveFiltersPanel(
+    copy,
+    activeDriftFilterItems,
+    buildDashboardViewUrl("resource-drift")
   );
 
   const backupCoveragePanel = `<article class="panel detail-shell">
@@ -6920,7 +7230,12 @@ function renderDashboard(
     copy.backupRunSignalsTitle,
     copy.backupRunSignalsDescription,
     backupStatusGroups.map((group) => ({
-      title: escapeHtml(group.key),
+      title: `<a class="detail-link" href="${escapeHtml(
+        buildDashboardViewUrl("backups", undefined, undefined, {
+          ...currentBackupFilters,
+          backupStatus: group.key
+        })
+      )}">${escapeHtml(group.key)}</a>`,
       meta: escapeHtml(`${group.items.length} run(s)`),
       summary: escapeHtml(
         group.items
@@ -6938,6 +7253,27 @@ function renderDashboard(
     copy.noBackups
   );
 
+  const backupNodesPanel = renderRelatedPanel(
+    copy.backupNodesTitle,
+    copy.backupNodesDescription,
+    backupNodeGroups.map((group) => ({
+      title: `<a class="detail-link mono" href="${escapeHtml(
+        buildDashboardViewUrl("backups", undefined, undefined, {
+          ...currentBackupFilters,
+          backupNode: group.key
+        })
+      )}">${escapeHtml(group.key)}</a>`,
+      meta: escapeHtml(`${group.items.length} run(s)`),
+      summary: escapeHtml(summarizeGroupStatuses(group.items)),
+      tone: group.items.some((run) => run.status === "failed")
+        ? ("danger" as const)
+        : group.items.some((run) => run.status === "succeeded")
+          ? ("success" as const)
+          : ("default" as const)
+    })),
+    copy.noBackups
+  );
+
   const backupCoverageByTenantPanel = renderRelatedPanel(
     copy.backupCoverageByTenantTitle,
     copy.backupCoverageByTenantDescription,
@@ -6951,7 +7287,10 @@ function renderDashboard(
 
       return {
         title: `<a class="detail-link" href="${escapeHtml(
-          buildDashboardViewUrl("desired-state", "desired-state-tenants", group.key)
+          buildDashboardViewUrl("backups", undefined, undefined, {
+            ...currentBackupFilters,
+            backupTenant: group.key
+          })
         )}">${escapeHtml(group.key)}</a>`,
         meta: escapeHtml(`${group.items.length} polic(ies)`),
         summary: escapeHtml(
@@ -6968,7 +7307,10 @@ function renderDashboard(
     copy.backupPolicySignalsDescription,
     backupPolicyGroups.map((group) => ({
       title: `<a class="detail-link mono" href="${escapeHtml(
-        buildDashboardViewUrl("backups", undefined, group.key)
+        buildDashboardViewUrl("backups", undefined, undefined, {
+          ...currentBackupFilters,
+          backupPolicy: group.key
+        })
       )}">${escapeHtml(group.key)}</a>`,
       meta: escapeHtml(`${group.items.length} run(s)`),
       summary: escapeHtml(summarizeGroupStatuses(group.items)),
@@ -6979,6 +7321,12 @@ function renderDashboard(
           : ("default" as const)
     })),
     copy.noBackups
+  );
+
+  const backupActiveFiltersPanel = renderActiveFiltersPanel(
+    copy,
+    activeBackupFilterItems,
+    buildDashboardViewUrl("backups")
   );
 
   const nodeHealthSection = `<section id="section-node-health" class="panel section-panel">
@@ -7026,11 +7374,12 @@ function renderDashboard(
 
   const resourceDriftSection = `<section id="section-resource-drift" class="panel section-panel">
     ${renderSignalStrip([
-      { label: copy.resourcesWithDrift, value: String(data.overview.driftedResourceCount), tone: data.overview.driftedResourceCount > 0 ? "danger" : "success" },
+      { label: copy.resourcesWithDrift, value: String(filteredDrift.length), tone: filteredDrift.length > 0 ? "danger" : "success" },
       { label: copy.driftPending, value: String(driftPendingCount), tone: driftPendingCount > 0 ? "muted" : "success" },
       { label: copy.driftOutOfSync, value: String(driftOutOfSyncCount), tone: driftOutOfSyncCount > 0 ? "danger" : "success" },
       { label: copy.driftMissingSecrets, value: String(driftMissingSecretCount), tone: driftMissingSecretCount > 0 ? "danger" : "success" }
     ])}
+    ${driftActiveFiltersPanel}
     ${renderDataTable({
       id: "section-resource-drift-table",
       heading: copy.resourceDriftTitle,
@@ -7055,6 +7404,7 @@ function renderDashboard(
     <div class="grid grid-two">
       ${selectedDriftPanel}
       <div class="stack">
+        ${driftStatusesPanel}
         ${driftNodesPanel}
         ${driftKindsPanel}
         ${selectedDriftActionPanel}
@@ -7074,6 +7424,7 @@ function renderDashboard(
       { label: "db reconcile", value: String(databaseReconcileJobCount), tone: databaseReconcileJobCount > 0 ? "muted" : "success" },
       { label: "backup.trigger", value: String(backupTriggerJobCount), tone: backupTriggerJobCount > 0 ? "muted" : "success" }
     ])}
+    ${jobActiveFiltersPanel}
     ${renderDataTable({
       id: "section-job-history-table",
       heading: copy.jobHistoryTitle,
@@ -7129,6 +7480,7 @@ function renderDashboard(
       { label: copy.failedBackups, value: String(backupFailedCount), tone: backupFailedCount > 0 ? "danger" : "success" },
       { label: copy.policyCoverage, value: String(backupCoverageCount), tone: backupCoverageCount > 0 ? "success" : "muted" }
     ])}
+    ${backupActiveFiltersPanel}
     ${renderDataTable({
       id: "section-backups-table",
       heading: copy.backupsTitle,
@@ -7153,6 +7505,7 @@ function renderDashboard(
       ${selectedBackupRunPanel}
       <div class="stack">
         ${backupCoveragePanel}
+        ${backupNodesPanel}
         ${backupCoverageByTenantPanel}
         ${backupTargetPosturePanel}
         ${backupPolicySignalsPanel}

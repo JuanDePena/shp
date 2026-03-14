@@ -2667,9 +2667,7 @@ function renderDashboard(
     eyebrow: copy.eyebrow,
     subheading: getDashboardSubheading(copy, view),
     notice,
-    topbar: {
-      actionsHtml: topbarActionsHtml
-    },
+    headerActionsHtml: topbarActionsHtml,
     versionLabel: copy.versionLabel,
     versionValue: config.version,
     sidebarSearchPlaceholder: copy.sidebarSearchPlaceholder,

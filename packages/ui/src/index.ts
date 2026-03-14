@@ -36,16 +36,12 @@ export interface AdminShellProps {
   eyebrow?: string;
   subheading?: string;
   body: string;
-  topbar: AdminTopbarProps;
+  headerActionsHtml?: string;
   versionLabel: string;
   versionValue: string;
   sidebarSearchPlaceholder: string;
   sidebarGroups: AdminNavGroup[];
   notice?: PanelNotice;
-}
-
-export interface AdminTopbarProps {
-  actionsHtml: string;
 }
 
 export interface TabItem {
@@ -713,15 +709,6 @@ export function renderDataTable(props: DataTableProps): string {
   </section>`;
 }
 
-export function renderAdminTopbar(props: AdminTopbarProps): string {
-  return `<header class="topbar">
-    <div class="topbar-bar">
-      <div class="topbar-spacer"></div>
-      <div class="topbar-actions">${props.actionsHtml}</div>
-    </div>
-  </header>`;
-}
-
 export function renderAdminShell(props: AdminShellProps): string {
   const noticeHtml = renderNotice(props.notice);
   const sidebarGroupsHtml = props.sidebarGroups
@@ -917,49 +904,21 @@ ${renderBaseStyleBlock()}
         align-content: start;
       }
 
-      .topbar {
-        position: relative;
-        padding: 0.56rem 0.6rem;
-        border: 1px solid var(--line);
-        border-radius: 1.05rem;
-        background: rgba(255, 255, 255, 0.78);
-        backdrop-filter: blur(14px);
-        box-shadow: 0 0.7rem 1.8rem rgba(16, 39, 68, 0.07);
-        min-height: 0;
-      }
-
-      .topbar,
-      .topbar a {
-        color: var(--ink);
-      }
-
-      .topbar-bar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 0.55rem;
-        min-height: 0;
-      }
-
-      .topbar-spacer {
-        flex: 1;
-        min-width: 0;
-      }
-
-      .topbar-actions {
+      .page-header-actions {
         display: flex;
         flex-wrap: nowrap;
         align-items: center;
         gap: 0.4rem;
         margin-left: auto;
+        color: var(--ink);
       }
 
-      .topbar-actions form,
-      .topbar-actions label {
+      .page-header-actions form,
+      .page-header-actions label {
         margin: 0;
       }
 
-      .topbar-actions select {
+      .page-header-actions select {
         width: 4.95rem;
         min-width: 4.95rem;
         min-height: 2.2rem;
@@ -1114,6 +1073,19 @@ ${renderBaseStyleBlock()}
         display: grid;
         gap: 0.45rem;
         padding: 1rem 1.1rem 0;
+      }
+
+      .page-header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+      }
+
+      .page-header-copy {
+        display: grid;
+        gap: 0.45rem;
+        min-width: 0;
       }
 
       .page-header p {
@@ -1356,8 +1328,8 @@ ${renderBaseStyleBlock()}
         background: rgba(255, 255, 255, 0.76);
       }
 
-      .topbar-actions button,
-      .topbar-actions .button-link,
+      .page-header-actions button,
+      .page-header-actions .button-link,
       .data-table-pagination button,
       .tab-button {
         min-height: 2.7rem;
@@ -1379,22 +1351,18 @@ ${renderBaseStyleBlock()}
           padding: 0.75rem;
         }
 
-        .topbar {
-          padding: 0.45rem 0.6rem;
-        }
-
         .panel {
           padding: 1rem;
         }
 
-        .topbar,
+        .page-header-row,
         .data-table-toolbar,
         .section-head {
           align-items: stretch;
         }
 
         .data-table-controls,
-        .topbar-actions {
+        .page-header-actions {
           justify-content: flex-end;
           flex-wrap: wrap;
         }
@@ -1425,14 +1393,22 @@ ${renderBaseStyleBlock()}
         </footer>
       </aside>
       <div class="admin-main">
-        ${renderAdminTopbar(props.topbar)}
         <section class="page-header">
-          <h1>${escapeHtml(props.heading)}</h1>
-          ${
-            props.subheading
-              ? `<p class="muted">${escapeHtml(props.subheading)}</p>`
-              : ""
-          }
+          <div class="page-header-row">
+            <div class="page-header-copy">
+              <h1>${escapeHtml(props.heading)}</h1>
+              ${
+                props.subheading
+                  ? `<p class="muted">${escapeHtml(props.subheading)}</p>`
+                  : ""
+              }
+            </div>
+            ${
+              props.headerActionsHtml
+                ? `<div class="page-header-actions">${props.headerActionsHtml}</div>`
+                : ""
+            }
+          </div>
         </section>
         ${noticeHtml}
         ${props.body}

@@ -1352,164 +1352,6 @@ function renderDesiredStateSection(
     )
     .join("");
 
-  const zoneRows = data.desiredState.spec.zones
-    .map(
-      (zone) => `<details>
-        <summary>${escapeHtml(zone.zoneName)}</summary>
-        <form method="post" action="/resources/zones/upsert" class="stack">
-          <input type="hidden" name="originalZoneName" value="${escapeHtml(zone.zoneName)}" />
-          <div class="form-grid">
-            <label>Zone name
-              <input name="zoneName" value="${escapeHtml(zone.zoneName)}" required />
-            </label>
-            <label>Tenant slug
-              <select name="tenantSlug" required>
-                ${renderSelectOptions(tenantOptions, zone.tenantSlug)}
-              </select>
-            </label>
-            <label>Primary node
-              <select name="primaryNodeId" required>
-                ${renderSelectOptions(nodeOptions, zone.primaryNodeId)}
-              </select>
-            </label>
-          </div>
-          <label>Records
-            <textarea name="records" spellcheck="false" class="mono">${escapeHtml(
-              formatZoneRecords(zone.records)
-            )}</textarea>
-          </label>
-          <div class="toolbar">
-            <button type="submit">Save zone</button>
-            <button class="secondary" type="submit" formaction="/actions/zone-sync">Dispatch dns.sync</button>
-            <button class="danger" type="submit" formaction="/resources/zones/delete">Delete zone</button>
-          </div>
-        </form>
-      </details>`
-    )
-    .join("");
-
-  const appRows = data.desiredState.spec.apps
-    .map(
-      (app) => `<details>
-        <summary>${escapeHtml(app.slug)} <span class="muted">(${escapeHtml(app.canonicalDomain)})</span></summary>
-        <form method="post" action="/resources/apps/upsert" class="stack">
-          <input type="hidden" name="originalSlug" value="${escapeHtml(app.slug)}" />
-          <div class="form-grid">
-            <label>Slug
-              <input name="slug" value="${escapeHtml(app.slug)}" required />
-            </label>
-            <label>Tenant slug
-              <select name="tenantSlug" required>
-                ${renderSelectOptions(tenantOptions, app.tenantSlug)}
-              </select>
-            </label>
-            <label>Zone name
-              <select name="zoneName" required>
-                ${renderSelectOptions(zoneOptions, app.zoneName)}
-              </select>
-            </label>
-            <label>Primary node
-              <select name="primaryNodeId" required>
-                ${renderSelectOptions(nodeOptions, app.primaryNodeId)}
-              </select>
-            </label>
-            <label>Standby node
-              <select name="standbyNodeId">
-                ${renderSelectOptions(nodeOptions, app.standbyNodeId, {
-                  allowBlank: true,
-                  blankLabel: "none"
-                })}
-              </select>
-            </label>
-            <label>Canonical domain
-              <input name="canonicalDomain" value="${escapeHtml(app.canonicalDomain)}" required />
-            </label>
-            <label>Aliases
-              <input name="aliases" value="${escapeHtml(app.aliases.join(", "))}" />
-            </label>
-            <label>Backend port
-              <input name="backendPort" type="number" value="${escapeHtml(String(app.backendPort))}" required />
-            </label>
-            <label>Runtime image
-              <input name="runtimeImage" value="${escapeHtml(app.runtimeImage)}" required />
-            </label>
-            <label>Storage root
-              <input name="storageRoot" value="${escapeHtml(app.storageRoot)}" required />
-            </label>
-            <label>Mode
-              <select name="mode">
-                <option value="active-passive"${app.mode === "active-passive" ? " selected" : ""}>active-passive</option>
-                <option value="active-active"${app.mode === "active-active" ? " selected" : ""}>active-active</option>
-              </select>
-            </label>
-          </div>
-          <div class="toolbar">
-            <button type="submit">Save app</button>
-            <button class="secondary" type="submit" formaction="/actions/app-reconcile">Full reconcile</button>
-            <button class="secondary" type="submit" formaction="/actions/app-render-proxy">Dispatch proxy.render</button>
-            <button class="danger" type="submit" formaction="/resources/apps/delete">Delete app</button>
-          </div>
-        </form>
-      </details>`
-    )
-    .join("");
-
-  const databaseRows = data.desiredState.spec.databases
-    .map(
-      (database) => `<details>
-        <summary>${escapeHtml(database.appSlug)} <span class="muted">(${escapeHtml(
-          `${database.engine}:${database.databaseName}`
-        )})</span></summary>
-        <form method="post" action="/resources/databases/upsert" class="stack">
-          <input type="hidden" name="originalAppSlug" value="${escapeHtml(database.appSlug)}" />
-          <div class="form-grid">
-            <label>App slug
-              <select name="appSlug" required>
-                ${renderSelectOptions(appOptions, database.appSlug)}
-              </select>
-            </label>
-            <label>Engine
-              <select name="engine">
-                <option value="postgresql"${database.engine === "postgresql" ? " selected" : ""}>postgresql</option>
-                <option value="mariadb"${database.engine === "mariadb" ? " selected" : ""}>mariadb</option>
-              </select>
-            </label>
-            <label>Database name
-              <input name="databaseName" value="${escapeHtml(database.databaseName)}" required />
-            </label>
-            <label>Database user
-              <input name="databaseUser" value="${escapeHtml(database.databaseUser)}" required />
-            </label>
-            <label>Primary node
-              <select name="primaryNodeId" required>
-                ${renderSelectOptions(nodeOptions, database.primaryNodeId)}
-              </select>
-            </label>
-            <label>Standby node
-              <select name="standbyNodeId">
-                ${renderSelectOptions(nodeOptions, database.standbyNodeId, {
-                  allowBlank: true,
-                  blankLabel: "none"
-                })}
-              </select>
-            </label>
-            <label>Pending migration target
-              <input name="pendingMigrationTo" value="${escapeHtml(database.pendingMigrationTo ?? "")}" />
-            </label>
-            <label>Desired password
-              <input type="password" name="desiredPassword" placeholder="leave blank to keep stored secret" />
-            </label>
-          </div>
-          <div class="toolbar">
-            <button type="submit">Save database</button>
-            <button class="secondary" type="submit" formaction="/actions/database-reconcile">Dispatch database reconcile</button>
-            <button class="danger" type="submit" formaction="/resources/databases/delete">Delete database</button>
-          </div>
-        </form>
-      </details>`
-    )
-    .join("");
-
   const backupRows = data.desiredState.spec.backupPolicies
     .map(
       (policy) => `<details>
@@ -1621,6 +1463,45 @@ function renderDesiredStateSection(
       </article>`
     : "";
 
+  const zoneEditorPanel = selectedZone
+    ? `<article class="panel detail-shell">
+        <div class="section-head">
+          <div>
+            <h3>${escapeHtml(copy.desiredStateEditorsTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.desiredStateEditorsDescription)}</p>
+          </div>
+        </div>
+        <form method="post" action="/resources/zones/upsert" class="stack">
+          <input type="hidden" name="originalZoneName" value="${escapeHtml(selectedZone.zoneName)}" />
+          <div class="form-grid">
+            <label>Zone name
+              <input name="zoneName" value="${escapeHtml(selectedZone.zoneName)}" required />
+            </label>
+            <label>Tenant slug
+              <select name="tenantSlug" required>
+                ${renderSelectOptions(tenantOptions, selectedZone.tenantSlug)}
+              </select>
+            </label>
+            <label>Primary node
+              <select name="primaryNodeId" required>
+                ${renderSelectOptions(nodeOptions, selectedZone.primaryNodeId)}
+              </select>
+            </label>
+          </div>
+          <label>Records
+            <textarea name="records" spellcheck="false" class="mono">${escapeHtml(
+              formatZoneRecords(selectedZone.records)
+            )}</textarea>
+          </label>
+          <div class="toolbar">
+            <button type="submit">Save zone</button>
+            <button class="secondary" type="submit" formaction="/actions/zone-sync">Dispatch dns.sync</button>
+            <button class="danger" type="submit" formaction="/resources/zones/delete">Delete zone</button>
+          </div>
+        </form>
+      </article>`
+    : "";
+
   const appDetailPanel = selectedApp
     ? `<article class="panel detail-shell">
         <div class="section-head">
@@ -1695,6 +1576,75 @@ function renderDesiredStateSection(
       </article>`
     : "";
 
+  const appEditorPanel = selectedApp
+    ? `<article class="panel detail-shell">
+        <div class="section-head">
+          <div>
+            <h3>${escapeHtml(copy.desiredStateEditorsTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.desiredStateEditorsDescription)}</p>
+          </div>
+        </div>
+        <form method="post" action="/resources/apps/upsert" class="stack">
+          <input type="hidden" name="originalSlug" value="${escapeHtml(selectedApp.slug)}" />
+          <div class="form-grid">
+            <label>Slug
+              <input name="slug" value="${escapeHtml(selectedApp.slug)}" required />
+            </label>
+            <label>Tenant slug
+              <select name="tenantSlug" required>
+                ${renderSelectOptions(tenantOptions, selectedApp.tenantSlug)}
+              </select>
+            </label>
+            <label>Zone name
+              <select name="zoneName" required>
+                ${renderSelectOptions(zoneOptions, selectedApp.zoneName)}
+              </select>
+            </label>
+            <label>Primary node
+              <select name="primaryNodeId" required>
+                ${renderSelectOptions(nodeOptions, selectedApp.primaryNodeId)}
+              </select>
+            </label>
+            <label>Standby node
+              <select name="standbyNodeId">
+                ${renderSelectOptions(nodeOptions, selectedApp.standbyNodeId, {
+                  allowBlank: true,
+                  blankLabel: "none"
+                })}
+              </select>
+            </label>
+            <label>Canonical domain
+              <input name="canonicalDomain" value="${escapeHtml(selectedApp.canonicalDomain)}" required />
+            </label>
+            <label>Aliases
+              <input name="aliases" value="${escapeHtml(selectedApp.aliases.join(", "))}" />
+            </label>
+            <label>Backend port
+              <input name="backendPort" type="number" value="${escapeHtml(String(selectedApp.backendPort))}" required />
+            </label>
+            <label>Runtime image
+              <input name="runtimeImage" value="${escapeHtml(selectedApp.runtimeImage)}" required />
+            </label>
+            <label>Storage root
+              <input name="storageRoot" value="${escapeHtml(selectedApp.storageRoot)}" required />
+            </label>
+            <label>Mode
+              <select name="mode">
+                <option value="active-passive"${selectedApp.mode === "active-passive" ? " selected" : ""}>active-passive</option>
+                <option value="active-active"${selectedApp.mode === "active-active" ? " selected" : ""}>active-active</option>
+              </select>
+            </label>
+          </div>
+          <div class="toolbar">
+            <button type="submit">Save app</button>
+            <button class="secondary" type="submit" formaction="/actions/app-reconcile">Full reconcile</button>
+            <button class="secondary" type="submit" formaction="/actions/app-render-proxy">Dispatch proxy.render</button>
+            <button class="danger" type="submit" formaction="/resources/apps/delete">Delete app</button>
+          </div>
+        </form>
+      </article>`
+    : "";
+
   const databaseDetailPanel = selectedDatabase
     ? `<article class="panel detail-shell">
         <div class="section-head">
@@ -1758,6 +1708,63 @@ function renderDesiredStateSection(
             </div>
           </article>
         </div>
+      </article>`
+    : "";
+
+  const databaseEditorPanel = selectedDatabase
+    ? `<article class="panel detail-shell">
+        <div class="section-head">
+          <div>
+            <h3>${escapeHtml(copy.desiredStateEditorsTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.desiredStateEditorsDescription)}</p>
+          </div>
+        </div>
+        <form method="post" action="/resources/databases/upsert" class="stack">
+          <input type="hidden" name="originalAppSlug" value="${escapeHtml(selectedDatabase.appSlug)}" />
+          <div class="form-grid">
+            <label>App slug
+              <select name="appSlug" required>
+                ${renderSelectOptions(appOptions, selectedDatabase.appSlug)}
+              </select>
+            </label>
+            <label>Engine
+              <select name="engine">
+                <option value="postgresql"${selectedDatabase.engine === "postgresql" ? " selected" : ""}>postgresql</option>
+                <option value="mariadb"${selectedDatabase.engine === "mariadb" ? " selected" : ""}>mariadb</option>
+              </select>
+            </label>
+            <label>Database name
+              <input name="databaseName" value="${escapeHtml(selectedDatabase.databaseName)}" required />
+            </label>
+            <label>Database user
+              <input name="databaseUser" value="${escapeHtml(selectedDatabase.databaseUser)}" required />
+            </label>
+            <label>Primary node
+              <select name="primaryNodeId" required>
+                ${renderSelectOptions(nodeOptions, selectedDatabase.primaryNodeId)}
+              </select>
+            </label>
+            <label>Standby node
+              <select name="standbyNodeId">
+                ${renderSelectOptions(nodeOptions, selectedDatabase.standbyNodeId, {
+                  allowBlank: true,
+                  blankLabel: "none"
+                })}
+              </select>
+            </label>
+            <label>Pending migration target
+              <input name="pendingMigrationTo" value="${escapeHtml(selectedDatabase.pendingMigrationTo ?? "")}" />
+            </label>
+            <label>Desired password
+              <input type="password" name="desiredPassword" placeholder="leave blank to keep stored secret" />
+            </label>
+          </div>
+          <div class="toolbar">
+            <button type="submit">Save database</button>
+            <button class="secondary" type="submit" formaction="/actions/database-reconcile">Dispatch database reconcile</button>
+            <button class="danger" type="submit" formaction="/resources/databases/delete">Delete database</button>
+          </div>
+        </form>
       </article>`
     : "";
 
@@ -2041,8 +2048,10 @@ function renderDesiredStateSection(
           recordsLabel: copy.records,
           defaultPageSize: 10
         })}
-        ${zoneDetailPanel}
-        ${renderEditorPanel("desired-state-zones-editors", zoneRows, copy.noZones)}
+        <div class="grid grid-two">
+          ${zoneDetailPanel || `<article class="panel"><p class="empty">${escapeHtml(copy.noZones)}</p></article>`}
+          ${zoneEditorPanel || `<article class="panel"><p class="empty">${escapeHtml(copy.noZones)}</p></article>`}
+        </div>
       </div>`
     },
     {
@@ -2071,8 +2080,10 @@ function renderDesiredStateSection(
           recordsLabel: copy.records,
           defaultPageSize: 10
         })}
-        ${appDetailPanel}
-        ${renderEditorPanel("desired-state-apps-editors", appRows, copy.noApps)}
+        <div class="grid grid-two">
+          ${appDetailPanel || `<article class="panel"><p class="empty">${escapeHtml(copy.noApps)}</p></article>`}
+          ${appEditorPanel || `<article class="panel"><p class="empty">${escapeHtml(copy.noApps)}</p></article>`}
+        </div>
       </div>`
     },
     {
@@ -2102,8 +2113,10 @@ function renderDesiredStateSection(
           recordsLabel: copy.records,
           defaultPageSize: 10
         })}
-        ${databaseDetailPanel}
-        ${renderEditorPanel("desired-state-databases-editors", databaseRows, copy.noDatabases)}
+        <div class="grid grid-two">
+          ${databaseDetailPanel || `<article class="panel"><p class="empty">${escapeHtml(copy.noDatabases)}</p></article>`}
+          ${databaseEditorPanel || `<article class="panel"><p class="empty">${escapeHtml(copy.noDatabases)}</p></article>`}
+        </div>
       </div>`
     },
     {

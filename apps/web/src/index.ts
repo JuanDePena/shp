@@ -48,7 +48,6 @@ const localeCookieName = "shp_lang";
 type WebLocale = "en" | "es";
 type DashboardView =
   | "overview"
-  | "context"
   | "node-health"
   | "resource-drift"
   | "job-history"
@@ -705,7 +704,6 @@ function sanitizeReturnTo(value: string | null | undefined): string {
 
 function normalizeDashboardView(value: string | null | undefined): DashboardView {
   switch (value) {
-    case "context":
     case "node-health":
     case "resource-drift":
     case "job-history":
@@ -750,8 +748,6 @@ function buildDashboardViewUrl(
 
 function getDashboardHeading(copy: WebCopy, view: DashboardView): string {
   switch (view) {
-    case "context":
-      return copy.navContext;
     case "node-health":
       return copy.nodeHealthTitle;
     case "resource-drift":
@@ -780,7 +776,6 @@ function getDashboardSubheading(copy: WebCopy, view: DashboardView): string {
       return copy.backupsDescription;
     case "desired-state":
       return copy.desiredStateDescription;
-    case "context":
     case "overview":
     default:
       return copy.dashboardSubheading;
@@ -2161,36 +2156,6 @@ function renderDashboard(
   notice?: PanelNotice
 ): string {
   const copy = copyByLocale[locale];
-  const actionBar = `<div class="action-grid">
-    <article class="action-card action-card-strong">
-      <span class="action-eyebrow">Planner</span>
-      <h3>${escapeHtml(copy.actionsRunReconciliation)}</h3>
-      <p class="muted">${escapeHtml(copy.actionPlanDescription)}</p>
-      <form method="post" action="/actions/reconcile-run">
-        <button type="submit">${escapeHtml(copy.actionsRunReconciliation)}</button>
-      </form>
-    </article>
-    <article class="action-card">
-      <span class="action-eyebrow">Inventory</span>
-      <h3>${escapeHtml(copy.actionsImportInventory)}</h3>
-      <p class="muted">${escapeHtml(copy.actionImportDescription)}</p>
-      <form method="post" action="/actions/inventory-import" class="stack">
-        <input type="text" name="path" value="${escapeHtml(
-          data.inventory.latestImport?.sourcePath ?? config.inventory.importPath
-        )}" />
-        <button class="secondary" type="submit">${escapeHtml(copy.actionsImportInventory)}</button>
-      </form>
-    </article>
-    <article class="action-card action-card-accent">
-      <span class="action-eyebrow">Export</span>
-      <h3>${escapeHtml(copy.actionsDownloadYaml)}</h3>
-      <p class="muted">${escapeHtml(copy.actionExportDescription)}</p>
-      <a class="button-link secondary" href="/inventory/export">${escapeHtml(
-        copy.actionsDownloadYaml
-      )}</a>
-    </article>
-  </div>`;
-
   const nodeHealthRows: DataTableRow[] = data.nodeHealth.map((node) => ({
     cells: [
       `<span class="mono">${escapeHtml(node.nodeId)}</span>`,
@@ -2322,41 +2287,86 @@ function renderDashboard(
        )}</p>`
     : `<p class="muted">${escapeHtml(copy.noReconciliationRun)}</p>`;
 
-  const contextSection = `<section id="section-context" class="panel section-panel">
-    <div class="section-head">
-      <div>
-        <h2>${escapeHtml(copy.navContext)}</h2>
-      </div>
-    </div>
-    <div class="grid grid-three">
-      <article class="panel">
-        <h3>${escapeHtml(copy.usersAndScope)}</h3>
-        <p><strong>${escapeHtml(data.currentUser.displayName)}</strong> &lt;${escapeHtml(
-          data.currentUser.email
-        )}&gt;</p>
-        <p class="muted">${escapeHtml(copy.globalRoles)}: ${escapeHtml(
-          formatList(data.currentUser.globalRoles, copy.none)
-        )}</p>
-        <p class="muted">${escapeHtml(copy.tenantMemberships)}: ${escapeHtml(tenantMemberships)}</p>
-      </article>
-      <article class="panel">
-        <h3>${escapeHtml(copy.inventoryImport)}</h3>
-        <p class="muted">${escapeHtml(copy.latestImport)}: ${escapeHtml(latestImportSummary)}</p>
-        <p class="muted">${escapeHtml(
-          interpolateCopy(copy.latestImportCounts, {
-            nodes: data.inventory.nodes.length,
-            zones: data.inventory.zones.length,
-            apps: data.inventory.apps.length,
-            databases: data.inventory.databases.length
-          })
-        )}</p>
-      </article>
-      <article class="panel">
-        <h3>${escapeHtml(copy.latestReconciliation)}</h3>
+  const renderActionFacts = (rows: Array<{ label: string; value: string }>): string => `<dl class="action-card-facts">
+      ${rows
+        .map(
+          (row) => `<div class="action-card-facts-row">
+            <dt>${escapeHtml(row.label)}</dt>
+            <dd>${row.value}</dd>
+          </div>`
+        )
+        .join("")}
+    </dl>`;
+
+  const actionBar = `<div class="action-grid">
+    <article class="action-card action-card-strong">
+      <span class="action-eyebrow">Planner</span>
+      <h3>${escapeHtml(copy.actionsRunReconciliation)}</h3>
+      <p class="muted">${escapeHtml(copy.actionPlanDescription)}</p>
+      <div class="action-card-context">
+        <span class="action-card-context-title">${escapeHtml(copy.latestReconciliation)}</span>
         ${latestReconciliationSummary}
-      </article>
-    </div>
-  </section>`;
+      </div>
+      <form method="post" action="/actions/reconcile-run">
+        <button type="submit">${escapeHtml(copy.actionsRunReconciliation)}</button>
+      </form>
+    </article>
+    <article class="action-card">
+      <span class="action-eyebrow">Inventory</span>
+      <h3>${escapeHtml(copy.actionsImportInventory)}</h3>
+      <p class="muted">${escapeHtml(copy.actionImportDescription)}</p>
+      <div class="action-card-context">
+        <span class="action-card-context-title">${escapeHtml(copy.inventoryImport)}</span>
+        ${renderActionFacts([
+          { label: copy.latestImport, value: escapeHtml(latestImportSummary) },
+          {
+            label: copy.records,
+            value: escapeHtml(
+              interpolateCopy(copy.latestImportCounts, {
+                nodes: data.inventory.nodes.length,
+                zones: data.inventory.zones.length,
+                apps: data.inventory.apps.length,
+                databases: data.inventory.databases.length
+              })
+            )
+          }
+        ])}
+      </div>
+      <form method="post" action="/actions/inventory-import" class="stack">
+        <input type="text" name="path" value="${escapeHtml(
+          data.inventory.latestImport?.sourcePath ?? config.inventory.importPath
+        )}" />
+        <button class="secondary" type="submit">${escapeHtml(copy.actionsImportInventory)}</button>
+      </form>
+    </article>
+    <article class="action-card action-card-accent">
+      <span class="action-eyebrow">Export</span>
+      <h3>${escapeHtml(copy.actionsDownloadYaml)}</h3>
+      <p class="muted">${escapeHtml(copy.actionExportDescription)}</p>
+      <div class="action-card-context">
+        <span class="action-card-context-title">${escapeHtml(copy.usersAndScope)}</span>
+        ${renderActionFacts([
+          {
+            label: copy.emailLabel,
+            value: `<strong>${escapeHtml(data.currentUser.displayName)}</strong> &lt;${escapeHtml(
+              data.currentUser.email
+            )}&gt;`
+          },
+          {
+            label: copy.globalRoles,
+            value: escapeHtml(formatList(data.currentUser.globalRoles, copy.none))
+          },
+          {
+            label: copy.tenantMemberships,
+            value: escapeHtml(tenantMemberships)
+          }
+        ])}
+      </div>
+      <a class="button-link secondary" href="/inventory/export">${escapeHtml(
+        copy.actionsDownloadYaml
+      )}</a>
+    </article>
+  </div>`;
 
   const topbarUserPanelHtml = `<div class="profile-sheet">
     <div class="profile-sheet-head">
@@ -2437,15 +2447,15 @@ function renderDashboard(
           id: "overview",
           label: copy.navOverview,
           href: buildDashboardViewUrl("overview"),
-          keywords: [copy.overviewTitle, copy.managedNodes, copy.pendingJobs],
+          keywords: [
+            copy.overviewTitle,
+            copy.managedNodes,
+            copy.pendingJobs,
+            copy.usersAndScope,
+            copy.inventoryImport,
+            copy.latestReconciliation
+          ],
           active: view === "overview"
-        },
-        {
-          id: "context",
-          label: copy.navContext,
-          href: buildDashboardViewUrl("context"),
-          keywords: [copy.usersAndScope, copy.inventoryImport, copy.latestReconciliation],
-          active: view === "context"
         }
       ]
     },
@@ -2648,8 +2658,6 @@ function renderDashboard(
 
   const body = (() => {
     switch (view) {
-      case "context":
-        return contextSection;
       case "node-health":
         return nodeHealthSection;
       case "resource-drift":

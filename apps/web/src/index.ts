@@ -161,6 +161,8 @@ interface WebCopy {
   plannedChangesDescription: string;
   effectiveStateTitle: string;
   effectiveStateDescription: string;
+  fieldDeltaTitle: string;
+  fieldDeltaDescription: string;
   comparisonFieldLabel: string;
   comparisonDesiredLabel: string;
   comparisonAppliedLabel: string;
@@ -168,6 +170,7 @@ interface WebCopy {
   comparisonMatchLabel: string;
   comparisonChangedLabel: string;
   comparisonUnknownLabel: string;
+  noFieldDeltas: string;
   jobStatusesTitle: string;
   jobStatusesDescription: string;
   jobResourceHotspotsTitle: string;
@@ -430,6 +433,9 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     effectiveStateTitle: "Effective state",
     effectiveStateDescription:
       "Current operational posture, most recent outcomes and related control-plane scope.",
+    fieldDeltaTitle: "Field deltas",
+    fieldDeltaDescription:
+      "Desired fields that differ from the last applied payload or still lack a confirmed runtime value.",
     comparisonFieldLabel: "Field",
     comparisonDesiredLabel: "Desired",
     comparisonAppliedLabel: "Last applied",
@@ -437,6 +443,7 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     comparisonMatchLabel: "match",
     comparisonChangedLabel: "changed",
     comparisonUnknownLabel: "unknown",
+    noFieldDeltas: "No field-level deltas detected.",
     jobStatusesTitle: "Job status mix",
     jobStatusesDescription: "Current distribution of queued, applied and failed work.",
     jobResourceHotspotsTitle: "Resource hotspots",
@@ -703,6 +710,9 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     effectiveStateTitle: "Estado efectivo",
     effectiveStateDescription:
       "Postura operativa actual, últimos resultados y alcance relacionado del control plane.",
+    fieldDeltaTitle: "Deltas por campo",
+    fieldDeltaDescription:
+      "Campos deseados que difieren del último payload aplicado o que todavía no tienen un valor de runtime confirmado.",
     comparisonFieldLabel: "Campo",
     comparisonDesiredLabel: "Deseado",
     comparisonAppliedLabel: "Último aplicado",
@@ -710,6 +720,7 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     comparisonMatchLabel: "coincide",
     comparisonChangedLabel: "cambió",
     comparisonUnknownLabel: "sin dato",
+    noFieldDeltas: "No se detectaron deltas por campo.",
     jobStatusesTitle: "Mezcla de estados de jobs",
     jobStatusesDescription: "Distribución actual de trabajo en cola, aplicado y fallido.",
     jobResourceHotspotsTitle: "Recursos más activos",
@@ -1862,6 +1873,35 @@ function summarizeComparisonRows(copy: WebCopy, rows: ComparisonRow[]): string {
   ].filter(Boolean);
 
   return parts.length > 0 ? parts.join(" · ") : copy.none;
+}
+
+function createComparisonDeltaItems(
+  copy: WebCopy,
+  rows: ComparisonRow[],
+  limit = 6
+): Array<{
+  title: string;
+  meta?: string;
+  summary?: string;
+  tone?: "default" | "danger" | "success";
+}> {
+  const deltas = rows.filter((row) => row.state !== "match").slice(0, limit);
+
+  if (deltas.length === 0) {
+    return [];
+  }
+
+  return deltas.map((row) => ({
+    title: row.field,
+    meta:
+      row.state === "changed"
+        ? copy.comparisonChangedLabel
+        : copy.comparisonUnknownLabel,
+    summary: `${copy.comparisonDesiredLabel}: ${row.desiredValue || copy.none} · ${copy.comparisonAppliedLabel}: ${
+      row.appliedValue || copy.none
+    }`,
+    tone: row.state === "changed" ? "danger" : "default"
+  }));
 }
 
 function readStringPayloadValue(payload: Record<string, unknown> | undefined, key: string): string | null {
@@ -3707,6 +3747,62 @@ function renderDesiredStateSection(
           zoneComparisonRows
         )}
         ${renderRelatedPanel(
+          copy.fieldDeltaTitle,
+          copy.fieldDeltaDescription,
+          createComparisonDeltaItems(copy, zoneComparisonRows),
+          copy.noFieldDeltas
+        )}
+        ${renderRelatedPanel(
+          copy.effectiveStateTitle,
+          copy.effectiveStateDescription,
+          [
+            {
+              title: escapeHtml(copy.nodeHealthTitle),
+              meta: escapeHtml(selectedZonePrimaryNodeHealth?.currentVersion ?? copy.none),
+              summary: escapeHtml(
+                selectedZonePrimaryNodeHealth?.latestJobSummary ??
+                  selectedZoneLatestSuccess?.summary ??
+                  copy.none
+              ),
+              tone: selectedZonePrimaryNodeHealth?.latestJobStatus === "failed"
+                ? ("danger" as const)
+                : selectedZonePrimaryNodeHealth?.latestJobStatus === "applied"
+                  ? ("success" as const)
+                  : ("default" as const)
+            },
+            {
+              title: escapeHtml(copy.relatedDriftTitle),
+              meta: escapeHtml(selectedZoneDrift?.driftStatus ?? copy.none),
+              summary: escapeHtml(
+                selectedZoneDrift?.latestSummary ??
+                  `${selectedZone.records.length} desired record(s) across ${selectedZoneApps.length} linked app(s).`
+              ),
+              tone:
+                selectedZoneDrift?.driftStatus === "out_of_sync" ||
+                selectedZoneDrift?.driftStatus === "missing_secret"
+                  ? ("danger" as const)
+                  : selectedZoneDrift?.driftStatus === "in_sync"
+                    ? ("success" as const)
+                    : ("default" as const)
+            },
+            {
+              title: escapeHtml(copy.relatedJobsTitle),
+              meta: escapeHtml(`${selectedZoneJobs.length} job(s)`),
+              summary: escapeHtml(
+                selectedZoneLatestFailure?.summary ??
+                  selectedZoneLatestSuccess?.summary ??
+                  copy.none
+              ),
+              tone: selectedZoneJobs.some((job) => job.status === "failed")
+                ? ("danger" as const)
+                : selectedZoneJobs.some((job) => job.status === "applied")
+                  ? ("success" as const)
+                  : ("default" as const)
+            }
+          ],
+          copy.noRelatedRecords
+        )}
+        ${renderRelatedPanel(
           copy.plannedChangesTitle,
           copy.plannedChangesDescription,
           selectedZoneActionPreviewItems,
@@ -3873,6 +3969,12 @@ function renderDesiredStateSection(
                 copy.queuedWorkDescription,
                 selectedZonePlanItems,
                 copy.noRelatedRecords
+              )}
+              ${renderRelatedPanel(
+                copy.fieldDeltaTitle,
+                copy.fieldDeltaDescription,
+                createComparisonDeltaItems(copy, zoneComparisonRows),
+                copy.noFieldDeltas
               )}
               ${renderRelatedPanel(
                 copy.plannedChangesTitle,
@@ -4075,6 +4177,63 @@ function renderDesiredStateSection(
           appComparisonRows
         )}
         ${renderRelatedPanel(
+          copy.fieldDeltaTitle,
+          copy.fieldDeltaDescription,
+          createComparisonDeltaItems(copy, appComparisonRows),
+          copy.noFieldDeltas
+        )}
+        ${renderRelatedPanel(
+          copy.effectiveStateTitle,
+          copy.effectiveStateDescription,
+          [
+            {
+              title: escapeHtml(copy.nodeHealthTitle),
+              meta: escapeHtml(selectedAppPrimaryNodeHealth?.currentVersion ?? copy.none),
+              summary: escapeHtml(
+                selectedAppPrimaryNodeHealth?.latestJobSummary ??
+                  selectedAppLatestSuccess?.summary ??
+                  copy.none
+              ),
+              tone: selectedAppPrimaryNodeHealth?.latestJobStatus === "failed"
+                ? ("danger" as const)
+                : selectedAppPrimaryNodeHealth?.latestJobStatus === "applied"
+                  ? ("success" as const)
+                  : ("default" as const)
+            },
+            {
+              title: escapeHtml(copy.relatedDriftTitle),
+              meta: escapeHtml(`${selectedAppProxyDrifts.length} drift item(s)`),
+              summary: escapeHtml(
+                selectedAppProxyDrifts[0]?.latestSummary ??
+                  `${selectedAppDatabases.length} database(s) and ${selectedApp.aliases.length} alias(es) currently depend on this app.`
+              ),
+              tone: selectedAppProxyDrifts.some(
+                (entry) =>
+                  entry.driftStatus === "out_of_sync" || entry.driftStatus === "missing_secret"
+              )
+                ? ("danger" as const)
+                : selectedAppProxyDrifts.some((entry) => entry.driftStatus === "in_sync")
+                  ? ("success" as const)
+                  : ("default" as const)
+            },
+            {
+              title: escapeHtml(copy.relatedJobsTitle),
+              meta: escapeHtml(`${selectedAppJobs.length} job(s)`),
+              summary: escapeHtml(
+                selectedAppLatestFailure?.summary ??
+                  selectedAppLatestSuccess?.summary ??
+                  copy.none
+              ),
+              tone: selectedAppJobs.some((job) => job.status === "failed")
+                ? ("danger" as const)
+                : selectedAppJobs.some((job) => job.status === "applied")
+                  ? ("success" as const)
+                  : ("default" as const)
+            }
+          ],
+          copy.noRelatedRecords
+        )}
+        ${renderRelatedPanel(
           copy.plannedChangesTitle,
           copy.plannedChangesDescription,
           selectedAppActionPreviewItems,
@@ -4246,6 +4405,12 @@ function renderDesiredStateSection(
                 copy.queuedWorkDescription,
                 selectedAppPlanItems,
                 copy.noRelatedRecords
+              )}
+              ${renderRelatedPanel(
+                copy.fieldDeltaTitle,
+                copy.fieldDeltaDescription,
+                createComparisonDeltaItems(copy, appComparisonRows),
+                copy.noFieldDeltas
               )}
               ${renderRelatedPanel(
                 copy.plannedChangesTitle,
@@ -4432,6 +4597,62 @@ function renderDesiredStateSection(
           databaseComparisonRows
         )}
         ${renderRelatedPanel(
+          copy.fieldDeltaTitle,
+          copy.fieldDeltaDescription,
+          createComparisonDeltaItems(copy, databaseComparisonRows),
+          copy.noFieldDeltas
+        )}
+        ${renderRelatedPanel(
+          copy.effectiveStateTitle,
+          copy.effectiveStateDescription,
+          [
+            {
+              title: escapeHtml(copy.nodeHealthTitle),
+              meta: escapeHtml(selectedDatabasePrimaryNodeHealth?.currentVersion ?? copy.none),
+              summary: escapeHtml(
+                selectedDatabasePrimaryNodeHealth?.latestJobSummary ??
+                  selectedDatabaseLatestSuccess?.summary ??
+                  copy.none
+              ),
+              tone: selectedDatabasePrimaryNodeHealth?.latestJobStatus === "failed"
+                ? ("danger" as const)
+                : selectedDatabasePrimaryNodeHealth?.latestJobStatus === "applied"
+                  ? ("success" as const)
+                  : ("default" as const)
+            },
+            {
+              title: escapeHtml(copy.relatedDriftTitle),
+              meta: escapeHtml(selectedDatabaseDrift?.driftStatus ?? copy.none),
+              summary: escapeHtml(
+                selectedDatabaseDrift?.latestSummary ??
+                  `${selectedDatabase.engine} on ${selectedDatabase.primaryNodeId} for ${selectedDatabase.databaseUser}.`
+              ),
+              tone:
+                selectedDatabaseDrift?.driftStatus === "out_of_sync" ||
+                selectedDatabaseDrift?.driftStatus === "missing_secret"
+                  ? ("danger" as const)
+                  : selectedDatabaseDrift?.driftStatus === "in_sync"
+                    ? ("success" as const)
+                    : ("default" as const)
+            },
+            {
+              title: escapeHtml(copy.relatedJobsTitle),
+              meta: escapeHtml(`${selectedDatabaseJobs.length} job(s)`),
+              summary: escapeHtml(
+                selectedDatabaseLatestFailure?.summary ??
+                  selectedDatabaseLatestSuccess?.summary ??
+                  copy.none
+              ),
+              tone: selectedDatabaseJobs.some((job) => job.status === "failed")
+                ? ("danger" as const)
+                : selectedDatabaseJobs.some((job) => job.status === "applied")
+                  ? ("success" as const)
+                  : ("default" as const)
+            }
+          ],
+          copy.noRelatedRecords
+        )}
+        ${renderRelatedPanel(
           copy.plannedChangesTitle,
           copy.plannedChangesDescription,
           selectedDatabaseActionPreviewItems,
@@ -4590,6 +4811,12 @@ function renderDesiredStateSection(
                 copy.queuedWorkDescription,
                 selectedDatabasePlanItems,
                 copy.noRelatedRecords
+              )}
+              ${renderRelatedPanel(
+                copy.fieldDeltaTitle,
+                copy.fieldDeltaDescription,
+                createComparisonDeltaItems(copy, databaseComparisonRows),
+                copy.noFieldDeltas
               )}
               ${renderRelatedPanel(
                 copy.plannedChangesTitle,
@@ -5461,6 +5688,39 @@ function renderDashboard(
   const selectedBackupPolicyTargetHealth = selectedBackupPolicySummary
     ? data.nodeHealth.find((entry) => entry.nodeId === selectedBackupPolicySummary.targetNodeId)
     : undefined;
+  const selectedBackupSummaryActionPreviewItems = selectedBackupPolicySummary
+    ? [
+        {
+          title: "backup.trigger",
+          meta: escapeHtml(
+            `${selectedBackupPolicySummary.targetNodeId} · ${selectedBackupPolicySummary.schedule}`
+          ),
+          summary: escapeHtml(
+            `${selectedBackupPolicyRuns.length} recorded run(s) and ${selectedBackupPolicySummary.resourceSelectors.length} selector(s) currently shape this backup scope.`
+          ),
+          tone:
+            selectedBackupPolicyLatestFailedRun || selectedBackupPolicyRuns.some((run) => run.status === "failed")
+              ? ("danger" as const)
+              : ("default" as const)
+        },
+        {
+          title: "policy.coverage",
+          meta: escapeHtml(
+            `${selectedBackupPolicyTenantApps.length} app(s) · ${selectedBackupPolicyTenantZones.length} zone(s) · ${selectedBackupPolicyTenantDatabases.length} database(s)`
+          ),
+          summary: escapeHtml(
+            `${selectedBackupPolicySummary.retentionDays}d retention at ${selectedBackupPolicySummary.storageLocation}.`
+          ),
+          tone:
+            selectedBackupPolicyTenantApps.length +
+              selectedBackupPolicyTenantZones.length +
+              selectedBackupPolicyTenantDatabases.length >
+            0
+              ? ("success" as const)
+              : ("default" as const)
+        }
+      ]
+    : [];
   const failedJobFocus = data.jobHistory.filter((job) => job.status === "failed").slice(0, 6);
   const jobNodeGroups = groupItemsBy(data.jobHistory, (job) => job.nodeId).slice(0, 6);
   const jobKindGroups = groupItemsBy(data.jobHistory, (job) => job.kind).slice(0, 6);
@@ -5532,8 +5792,8 @@ function renderDashboard(
       </article>
       <article class="action-card action-card-muted">
         <span class="action-eyebrow">${escapeHtml(copy.bootstrapInventoryTitle)}</span>
-        <h3>${escapeHtml(copy.actionsDownloadYaml)}</h3>
-        <p class="muted">${escapeHtml(copy.actionExportDescription)}</p>
+        <h3>${escapeHtml(copy.bootstrapInventoryTitle)}</h3>
+        <p class="muted">${escapeHtml(copy.bootstrapInventoryDescription)}</p>
         <div class="action-card-context">
           <span class="action-card-context-title">${escapeHtml(copy.usersAndScope)}</span>
           ${renderActionFacts(
@@ -5951,6 +6211,45 @@ function renderDashboard(
             ${selectedJob.details ? renderCodeBlock(selectedJob.details) : `<p class="muted">${escapeHtml(copy.none)}</p>`}
           </article>
         </div>
+        ${renderRelatedPanel(
+          copy.effectiveStateTitle,
+          copy.effectiveStateDescription,
+          [
+            {
+              title: escapeHtml(copy.linkedResource),
+              meta: escapeHtml(selectedJob.resourceKey ?? copy.none),
+              summary: escapeHtml(
+                selectedJob.summary ?? selectedJob.dispatchReason ?? copy.none
+              ),
+              tone: selectedJob.status === "failed"
+                ? ("danger" as const)
+                : selectedJob.status === "applied"
+                  ? ("success" as const)
+                  : ("default" as const)
+            },
+            {
+              title: escapeHtml(copy.relatedJobsTitle),
+              meta: escapeHtml(`${selectedJobRelatedJobs.length} job(s)`),
+              summary: escapeHtml(
+                selectedJobRelatedJobs[0]?.summary ??
+                  selectedJobRelatedJobs[0]?.dispatchReason ??
+                  copy.none
+              ),
+              tone: selectedJobRelatedJobs.some((job) => job.status === "failed")
+                ? ("danger" as const)
+                : selectedJobRelatedJobs.some((job) => job.status === "applied")
+                  ? ("success" as const)
+                  : ("default" as const)
+            },
+            {
+              title: escapeHtml(copy.auditTrailTitle),
+              meta: escapeHtml(`${selectedJobAuditEvents.length} event(s)`),
+              summary: escapeHtml(selectedJobAuditEvents[0]?.eventType ?? copy.none),
+              tone: "default" as const
+            }
+          ],
+          copy.noRelatedRecords
+        )}
       </article>`
     : `<article class="panel"><p class="empty">${escapeHtml(copy.noJobs)}</p></article>`;
 
@@ -6198,6 +6497,47 @@ function renderDashboard(
               : renderPill(copy.none, "muted")
           }
         ])}
+        ${renderRelatedPanel(
+          copy.effectiveStateTitle,
+          copy.effectiveStateDescription,
+          [
+            {
+              title: escapeHtml(copy.nodeHealthTitle),
+              meta: escapeHtml(selectedBackupPolicyTargetHealth?.currentVersion ?? copy.none),
+              summary: escapeHtml(
+                selectedBackupPolicyTargetHealth?.latestJobSummary ??
+                  selectedBackupPolicyLatestSuccessRun?.summary ??
+                  copy.none
+              ),
+              tone: selectedBackupPolicyTargetHealth?.latestJobStatus === "failed"
+                ? ("danger" as const)
+                : selectedBackupPolicyTargetHealth?.latestJobStatus === "applied"
+                  ? ("success" as const)
+                  : ("default" as const)
+            },
+            {
+              title: escapeHtml(copy.relatedJobsTitle),
+              meta: escapeHtml(`${selectedBackupPolicyRuns.length} run(s)`),
+              summary: escapeHtml(
+                selectedBackupPolicyLatestFailedRun?.summary ??
+                  selectedBackupPolicyLatestSuccessRun?.summary ??
+                  copy.none
+              ),
+              tone: selectedBackupPolicyRuns.some((run) => run.status === "failed")
+                ? ("danger" as const)
+                : selectedBackupPolicyRuns.some((run) => run.status === "succeeded")
+                  ? ("success" as const)
+                  : ("default" as const)
+            }
+          ],
+          copy.noRelatedRecords
+        )}
+        ${renderRelatedPanel(
+          copy.plannedChangesTitle,
+          copy.plannedChangesDescription,
+          selectedBackupSummaryActionPreviewItems,
+          copy.noRelatedRecords
+        )}
         ${renderRelatedPanel(
           copy.relatedResourcesTitle,
           copy.relatedResourcesDescription,

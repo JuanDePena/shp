@@ -10,6 +10,7 @@ import { Pool, type PoolClient } from "pg";
 import YAML from "yaml";
 
 import {
+  type AuditEventSummary,
   type BackupRunRecordRequest,
   type BackupRunSummary,
   type BackupsOverview,
@@ -279,6 +280,7 @@ interface JobHistoryRow {
   payload: Record<string, unknown>;
   status: string | null;
   summary: string | null;
+  details: Record<string, unknown> | null;
   dispatch_reason: string | null;
   resource_key: string | null;
 }
@@ -291,6 +293,21 @@ interface NodeHealthRow {
   pending_job_count: number;
   latest_job_status: string | null;
   latest_job_summary: string | null;
+  drifted_resource_count: number;
+  primary_zone_count: number;
+  primary_app_count: number;
+  backup_policy_count: number;
+}
+
+interface AuditEventRow {
+  event_id: string;
+  actor_type: string;
+  actor_id: string | null;
+  event_type: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  payload: Record<string, unknown> | null;
+  occurred_at: Date | string;
 }
 
 interface AuditEventInput {
@@ -369,6 +386,10 @@ export interface PanelControlPlaneStore {
     presentedToken: string | null,
     limit?: number
   ): Promise<JobHistoryEntry[]>;
+  listAuditEvents(
+    presentedToken: string | null,
+    limit?: number
+  ): Promise<AuditEventSummary[]>;
   getBackupsOverview(presentedToken: string | null): Promise<BackupsOverview>;
   recordBackupRun(
     request: BackupRunRecordRequest,
@@ -698,7 +719,11 @@ function toNodeHealthSnapshot(row: NodeHealthRow): NodeHealthSnapshot {
     lastSeenAt: row.last_seen_at ? normalizeTimestamp(row.last_seen_at) : undefined,
     pendingJobCount: Number(row.pending_job_count),
     latestJobStatus: (row.latest_job_status as NodeHealthSnapshot["latestJobStatus"]) ?? undefined,
-    latestJobSummary: row.latest_job_summary ?? undefined
+    latestJobSummary: row.latest_job_summary ?? undefined,
+    driftedResourceCount: Number(row.drifted_resource_count ?? 0),
+    primaryZoneCount: Number(row.primary_zone_count ?? 0),
+    primaryAppCount: Number(row.primary_app_count ?? 0),
+    backupPolicyCount: Number(row.backup_policy_count ?? 0)
   };
 }
 
@@ -720,7 +745,23 @@ function toJobHistoryEntry(
     resourceKey: row.resource_key ?? undefined,
     payload: sanitizePayload(
       decodeStoredJobPayload(row.payload, payloadKey)
-    ) as Record<string, unknown>
+    ) as Record<string, unknown>,
+    details: row.details
+      ? (sanitizePayload(row.details) as Record<string, unknown>)
+      : undefined
+  };
+}
+
+function toAuditEventSummary(row: AuditEventRow): AuditEventSummary {
+  return {
+    eventId: row.event_id,
+    actorType: row.actor_type,
+    actorId: row.actor_id ?? undefined,
+    eventType: row.event_type,
+    entityType: row.entity_type ?? undefined,
+    entityId: row.entity_id ?? undefined,
+    payload: (row.payload ?? {}) as Record<string, unknown>,
+    occurredAt: normalizeTimestamp(row.occurred_at)
   };
 }
 
@@ -3641,6 +3682,10 @@ export async function createPostgresControlPlaneStore(
              control.version AS current_version,
              control.last_seen_at,
              COALESCE(pending.pending_job_count, 0) AS pending_job_count,
+             COALESCE(drift.drifted_resource_count, 0) AS drifted_resource_count,
+             COALESCE(zones.primary_zone_count, 0) AS primary_zone_count,
+             COALESCE(apps.primary_app_count, 0) AS primary_app_count,
+             COALESCE(backups.backup_policy_count, 0) AS backup_policy_count,
              latest.status AS latest_job_status,
              latest.summary AS latest_job_summary
            FROM shp_nodes nodes
@@ -3653,6 +3698,31 @@ export async function createPostgresControlPlaneStore(
              GROUP BY node_id
            ) pending
              ON pending.node_id = nodes.node_id
+           LEFT JOIN (
+             SELECT node_id, COUNT(*) AS drifted_resource_count
+             FROM shp_resource_drift_status
+             WHERE drift_status <> 'in_sync'
+             GROUP BY node_id
+           ) drift
+             ON drift.node_id = nodes.node_id
+           LEFT JOIN (
+             SELECT primary_node_id AS node_id, COUNT(*) AS primary_zone_count
+             FROM shp_zones
+             GROUP BY primary_node_id
+           ) zones
+             ON zones.node_id = nodes.node_id
+           LEFT JOIN (
+             SELECT primary_node_id AS node_id, COUNT(*) AS primary_app_count
+             FROM shp_apps
+             GROUP BY primary_node_id
+           ) apps
+             ON apps.node_id = nodes.node_id
+           LEFT JOIN (
+             SELECT target_node_id AS node_id, COUNT(*) AS backup_policy_count
+             FROM shp_backup_policies
+             GROUP BY target_node_id
+           ) backups
+             ON backups.node_id = nodes.node_id
            LEFT JOIN (
              SELECT DISTINCT ON (jobs.node_id)
                jobs.node_id,
@@ -3690,6 +3760,7 @@ export async function createPostgresControlPlaneStore(
              jobs.payload,
              results.status,
              results.summary,
+             results.details,
              jobs.dispatch_reason,
              jobs.resource_key
            FROM control_plane_jobs jobs
@@ -3701,6 +3772,33 @@ export async function createPostgresControlPlaneStore(
         );
 
         return result.rows.map((row) => toJobHistoryEntry(row, jobPayloadKey));
+      });
+    },
+
+    async listAuditEvents(presentedToken, limit = 50) {
+      return withTransaction(pool, async (client) => {
+        await requireAuthorizedUser(client, presentedToken, [
+          "platform_admin",
+          "platform_operator"
+        ]);
+        const boundedLimit = Math.max(1, Math.min(limit, 200));
+        const result = await client.query<AuditEventRow>(
+          `SELECT
+             event_id,
+             actor_type,
+             actor_id,
+             event_type,
+             entity_type,
+             entity_id,
+             payload,
+             occurred_at
+           FROM shp_audit_events
+           ORDER BY occurred_at DESC
+           LIMIT $1`,
+          [boundedLimit]
+        );
+
+        return result.rows.map(toAuditEventSummary);
       });
     },
 

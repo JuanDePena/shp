@@ -391,6 +391,10 @@ export interface NodeHealthSnapshot {
   pendingJobCount: number;
   latestJobStatus?: DispatchedJobStatus;
   latestJobSummary?: string;
+  driftedResourceCount?: number;
+  primaryZoneCount?: number;
+  primaryAppCount?: number;
+  backupPolicyCount?: number;
 }
 
 export interface JobHistoryEntry {
@@ -406,6 +410,18 @@ export interface JobHistoryEntry {
   dispatchReason?: string;
   resourceKey?: string;
   payload: Record<string, unknown>;
+  details?: Record<string, unknown>;
+}
+
+export interface AuditEventSummary {
+  eventId: string;
+  actorType: string;
+  actorId?: string;
+  eventType: string;
+  entityType?: string;
+  entityId?: string;
+  payload: Record<string, unknown>;
+  occurredAt: string;
 }
 
 export interface BackupPolicySummary {

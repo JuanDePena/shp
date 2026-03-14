@@ -1,10 +1,12 @@
 import { realpathSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { isIP } from "node:net";
 import { fileURLToPath } from "node:url";
 
 import { createPanelRuntimeConfig } from "@simplehost/panel-config";
 import {
   type AppReconcileRequest,
+  type AuditEventSummary,
   type AuthLoginRequest,
   type AuthLoginResponse,
   type AuthenticatedUserSummary,
@@ -74,6 +76,7 @@ interface DashboardData {
   drift: ResourceDriftSummary[];
   nodeHealth: NodeHealthSnapshot[];
   jobHistory: JobHistoryEntry[];
+  auditEvents: AuditEventSummary[];
   backups: BackupsOverview;
 }
 
@@ -135,6 +138,15 @@ interface WebCopy {
   usersAndScope: string;
   inventoryImport: string;
   latestReconciliation: string;
+  auditTrailTitle: string;
+  auditTrailDescription: string;
+  payloadTitle: string;
+  relatedJobsTitle: string;
+  relatedDriftTitle: string;
+  nodeDiagnosticsTitle: string;
+  nodeDiagnosticsDescription: string;
+  bootstrapInventoryTitle: string;
+  bootstrapInventoryDescription: string;
   globalRoles: string;
   tenantMemberships: string;
   none: string;
@@ -280,14 +292,14 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     dashboardSubheading: "Operate nodes, jobs, backups, and desired state from a single control surface.",
     overviewDescription: "Live platform counts plus the main control-plane actions.",
     actionsRunReconciliation: "Run reconciliation",
-    actionsImportInventory: "Import YAML inventory",
+    actionsImportInventory: "Bootstrap YAML import",
     actionsDownloadYaml: "Download desired-state YAML",
     actionDispatchDnsSync: "Dispatch dns.sync",
     actionFullReconcile: "Full reconcile",
     actionDispatchProxyRender: "Dispatch proxy.render",
     actionDispatchDatabaseReconcile: "Dispatch database reconcile",
     actionPlanDescription: "Compare desired state against the last successful apply and dispatch missing work.",
-    actionImportDescription: "Refresh PostgreSQL desired state from the bootstrap YAML inventory path.",
+    actionImportDescription: "Use the transitional YAML import path to seed or recover PostgreSQL desired state.",
     actionExportDescription: "Export the current desired state for audit, review, or disaster recovery.",
     overviewTitle: "Operations overview",
     managedNodes: "Managed nodes",
@@ -299,6 +311,15 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     usersAndScope: "Users and scope",
     inventoryImport: "Inventory import",
     latestReconciliation: "Latest reconciliation",
+    auditTrailTitle: "Recent audit",
+    auditTrailDescription: "Recent control-plane mutations and runtime events.",
+    payloadTitle: "Payload and result",
+    relatedJobsTitle: "Related jobs",
+    relatedDriftTitle: "Related drift",
+    nodeDiagnosticsTitle: "Node diagnostics",
+    nodeDiagnosticsDescription: "Inspect drift, recent jobs and routing scope for the selected node.",
+    bootstrapInventoryTitle: "Bootstrap inventory",
+    bootstrapInventoryDescription: "Use YAML import only as a transitional bootstrap or disaster-recovery source. PostgreSQL desired state remains authoritative.",
     globalRoles: "Global roles",
     tenantMemberships: "Tenant memberships",
     none: "none",
@@ -442,14 +463,14 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     dashboardSubheading: "Opera nodos, jobs, backups y estado deseado desde una sola consola.",
     overviewDescription: "Conteos vivos de la plataforma y las acciones principales del control plane.",
     actionsRunReconciliation: "Ejecutar reconciliación",
-    actionsImportInventory: "Importar inventario YAML",
+    actionsImportInventory: "Importar YAML bootstrap",
     actionsDownloadYaml: "Descargar YAML del estado deseado",
     actionDispatchDnsSync: "Despachar dns.sync",
     actionFullReconcile: "Reconciliación completa",
     actionDispatchProxyRender: "Despachar proxy.render",
     actionDispatchDatabaseReconcile: "Despachar reconcile de base de datos",
     actionPlanDescription: "Compara el estado deseado contra la última aplicación exitosa y despacha el trabajo faltante.",
-    actionImportDescription: "Refresca el estado deseado en PostgreSQL desde la ruta actual del inventario YAML.",
+    actionImportDescription: "Usa la ruta YAML transicional para sembrar o recuperar el estado deseado en PostgreSQL.",
     actionExportDescription: "Exporta el estado deseado actual para auditoría, revisión o recuperación.",
     overviewTitle: "Resumen operativo",
     managedNodes: "Nodos gestionados",
@@ -461,6 +482,15 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     usersAndScope: "Usuarios y alcance",
     inventoryImport: "Importación de inventario",
     latestReconciliation: "Última reconciliación",
+    auditTrailTitle: "Auditoría reciente",
+    auditTrailDescription: "Mutaciones recientes del control plane y eventos de runtime.",
+    payloadTitle: "Payload y resultado",
+    relatedJobsTitle: "Jobs relacionados",
+    relatedDriftTitle: "Drift relacionado",
+    nodeDiagnosticsTitle: "Diagnóstico del nodo",
+    nodeDiagnosticsDescription: "Inspecciona drift, jobs recientes y alcance operativo del nodo seleccionado.",
+    bootstrapInventoryTitle: "Inventario bootstrap",
+    bootstrapInventoryDescription: "Usa la importación YAML solo como mecanismo transicional de bootstrap o disaster recovery. PostgreSQL sigue siendo la fuente autoritativa.",
     globalRoles: "Roles globales",
     tenantMemberships: "Membresías por tenant",
     none: "ninguna",
@@ -719,7 +749,7 @@ function normalizeDesiredStateTab(value: string | null | undefined): DesiredStat
   return desiredStateTabIds.find((candidate) => candidate === value) ?? "desired-state-create";
 }
 
-function normalizeDesiredStateFocus(value: string | null | undefined): string | undefined {
+function normalizeDashboardFocus(value: string | null | undefined): string | undefined {
   const normalized = value?.trim();
   return normalized ? normalized : undefined;
 }
@@ -737,9 +767,10 @@ function buildDashboardViewUrl(
 
   if (view === "desired-state") {
     search.set("tab", tab ?? "desired-state-create");
-    if (focus) {
-      search.set("focus", focus);
-    }
+  }
+
+  if (view !== "overview" && focus) {
+    search.set("focus", focus);
   }
 
   const query = search.toString();
@@ -918,6 +949,110 @@ function parseCommaSeparated(value: string): string[] {
     .filter(Boolean);
 }
 
+const slugPattern = /^[a-z0-9](?:[a-z0-9-_]{0,61}[a-z0-9])?$/;
+const hostnamePattern =
+  /^(?=.{1,253}$)(?!-)(?:[a-zA-Z0-9-]{1,63}\.)*[a-zA-Z0-9-]{1,63}$/;
+const domainPattern =
+  /^(?=.{1,253}$)(?!-)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
+
+function assertRequired(value: string, label: string): string {
+  if (value.trim().length === 0) {
+    throw new Error(`${label} is required.`);
+  }
+
+  return value.trim();
+}
+
+function assertSlug(value: string, label: string): string {
+  const normalized = assertRequired(value, label).toLowerCase();
+
+  if (!slugPattern.test(normalized)) {
+    throw new Error(
+      `${label} must use lowercase letters, numbers, hyphen or underscore.`
+    );
+  }
+
+  return normalized;
+}
+
+function assertHostname(value: string, label: string): string {
+  const normalized = assertRequired(value, label).toLowerCase();
+
+  if (!hostnamePattern.test(normalized)) {
+    throw new Error(`${label} is not a valid hostname.`);
+  }
+
+  return normalized;
+}
+
+function assertDomain(value: string, label: string): string {
+  const normalized = assertRequired(value, label).toLowerCase();
+
+  if (!domainPattern.test(normalized)) {
+    throw new Error(`${label} is not a valid domain name.`);
+  }
+
+  return normalized;
+}
+
+function assertIpv4(value: string, label: string): string {
+  const normalized = assertRequired(value, label);
+
+  if (isIP(normalized) !== 4) {
+    throw new Error(`${label} must be a valid IPv4 address.`);
+  }
+
+  return normalized;
+}
+
+function assertWireguardAddress(value: string, label: string): string {
+  const normalized = assertRequired(value, label);
+  const [address, prefix] = normalized.split("/", 2);
+
+  if (isIP(address) !== 4) {
+    throw new Error(`${label} must use a valid IPv4 address.`);
+  }
+
+  if (prefix) {
+    const parsedPrefix = Number.parseInt(prefix, 10);
+    if (!Number.isInteger(parsedPrefix) || parsedPrefix < 0 || parsedPrefix > 32) {
+      throw new Error(`${label} must use a valid CIDR prefix.`);
+    }
+  }
+
+  return normalized;
+}
+
+function assertPositiveInt(
+  value: number | undefined,
+  label: string,
+  options: { min?: number; max?: number } = {}
+): number {
+  if (value === undefined || !Number.isInteger(value)) {
+    throw new Error(`${label} must be an integer.`);
+  }
+
+  if (options.min !== undefined && value < options.min) {
+    throw new Error(`${label} must be at least ${options.min}.`);
+  }
+
+  if (options.max !== undefined && value > options.max) {
+    throw new Error(`${label} must be at most ${options.max}.`);
+  }
+
+  return value;
+}
+
+function assertCronish(value: string, label: string): string {
+  const normalized = assertRequired(value, label);
+
+  if (normalized.split(/\s+/).length < 5) {
+    throw new Error(`${label} must look like a cron expression.`);
+  }
+
+  return normalized;
+}
+
 function parseZoneRecords(value: string): DnsRecordPayload[] {
   const records: DnsRecordPayload[] = [];
   const lines = value
@@ -1039,6 +1174,94 @@ function renderStats(
   )}</p>`;
 }
 
+function renderCodeBlock(value: unknown): string {
+  return `<pre class="code-block">${escapeHtml(JSON.stringify(value, null, 2))}</pre>`;
+}
+
+function payloadContainsValue(payload: unknown, needle: string): boolean {
+  if (typeof payload === "string") {
+    return payload === needle || payload.includes(needle);
+  }
+
+  if (typeof payload === "number" || typeof payload === "boolean" || payload === null) {
+    return String(payload) === needle;
+  }
+
+  if (Array.isArray(payload)) {
+    return payload.some((entry) => payloadContainsValue(entry, needle));
+  }
+
+  if (payload && typeof payload === "object") {
+    return Object.values(payload).some((entry) => payloadContainsValue(entry, needle));
+  }
+
+  return false;
+}
+
+function renderFeedList(
+  items: Array<{
+    title: string;
+    meta?: string;
+    summary?: string;
+    summaryHtml?: string;
+    tone?: "default" | "danger" | "success";
+  }>
+): string {
+  if (items.length === 0) {
+    return '<p class="empty">No related records.</p>';
+  }
+
+  return `<div class="feed-list">
+    ${items
+      .map(
+        (item) => `<article class="feed-item${
+          item.tone === "danger"
+            ? " feed-item-danger"
+            : item.tone === "success"
+              ? " feed-item-success"
+              : ""
+        }">
+          <strong>${item.title}</strong>
+          ${item.meta ? `<span class="feed-meta">${item.meta}</span>` : ""}
+          ${item.summaryHtml ? item.summaryHtml : item.summary ? `<p>${item.summary}</p>` : ""}
+        </article>`
+      )
+      .join("")}
+  </div>`;
+}
+
+function renderAuditPanel(
+  copy: WebCopy,
+  locale: WebLocale,
+  events: AuditEventSummary[]
+): string {
+  return `<article class="panel detail-shell">
+    <div class="section-head">
+      <div>
+        <h3>${escapeHtml(copy.auditTrailTitle)}</h3>
+        <p class="muted section-description">${escapeHtml(copy.auditTrailDescription)}</p>
+      </div>
+    </div>
+    ${renderFeedList(
+      events.map((event) => ({
+        title: escapeHtml(event.eventType),
+        meta: escapeHtml(
+          [
+            event.entityType && event.entityId
+              ? `${event.entityType}:${event.entityId}`
+              : event.entityType ?? event.entityId ?? "",
+            formatDate(event.occurredAt, locale)
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        ),
+        summaryHtml:
+          Object.keys(event.payload).length > 0 ? renderCodeBlock(event.payload) : undefined
+      }))
+    )}
+  </article>`;
+}
+
 function renderDetailGrid(
   entries: Array<{ label: string; value: string }>
 ): string {
@@ -1067,7 +1290,12 @@ function renderProfileFacts(
   </dl>`;
 }
 
-function renderActionForm(action: string, hiddenFields: Record<string, string>, label: string): string {
+function renderActionForm(
+  action: string,
+  hiddenFields: Record<string, string>,
+  label: string,
+  options: { confirmMessage?: string } = {}
+): string {
   return `<form method="post" action="${escapeHtml(action)}" class="inline-form">
     ${Object.entries(hiddenFields)
       .map(
@@ -1075,7 +1303,11 @@ function renderActionForm(action: string, hiddenFields: Record<string, string>, 
           `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}" />`
       )
       .join("")}
-    <button class="secondary" type="submit">${escapeHtml(label)}</button>
+    <button class="secondary" type="submit"${
+      options.confirmMessage
+        ? ` data-confirm="${escapeHtml(options.confirmMessage)}"`
+        : ""
+    }>${escapeHtml(label)}</button>
   </form>`;
 }
 
@@ -1171,6 +1403,21 @@ function renderDesiredStateSection(
             `${database.engine}:${database.databaseName}` === focus
         ) ?? data.desiredState.spec.databases[0]
       : undefined;
+  const selectedTenant =
+    defaultTabId === "desired-state-tenants"
+      ? data.desiredState.spec.tenants.find((tenant) => tenant.slug === focus) ??
+        data.desiredState.spec.tenants[0]
+      : undefined;
+  const selectedNode =
+    defaultTabId === "desired-state-nodes"
+      ? data.desiredState.spec.nodes.find((node) => node.nodeId === focus) ??
+        data.desiredState.spec.nodes[0]
+      : undefined;
+  const selectedBackupPolicy =
+    defaultTabId === "desired-state-backups"
+      ? data.desiredState.spec.backupPolicies.find((policy) => policy.policySlug === focus) ??
+        data.desiredState.spec.backupPolicies[0]
+      : undefined;
   const selectedDatabaseApp = selectedDatabase
     ? data.desiredState.spec.apps.find((app) => app.slug === selectedDatabase.appSlug)
     : undefined;
@@ -1189,14 +1436,24 @@ function renderDesiredStateSection(
     </article>`;
   const tenantTableRows: DataTableRow[] = data.desiredState.spec.tenants.map((tenant) => ({
     cells: [
-      `<span class="mono">${escapeHtml(tenant.slug)}</span>`,
+      renderFocusLink(
+        tenant.slug,
+        buildDashboardViewUrl("desired-state", "desired-state-tenants", tenant.slug),
+        selectedTenant?.slug === tenant.slug,
+        copy.selectedStateLabel
+      ),
       escapeHtml(tenant.displayName)
     ],
     searchText: `${tenant.slug} ${tenant.displayName}`.toLowerCase()
   }));
   const nodeTableRows: DataTableRow[] = data.desiredState.spec.nodes.map((node) => ({
     cells: [
-      `<span class="mono">${escapeHtml(node.nodeId)}</span>`,
+      renderFocusLink(
+        node.nodeId,
+        buildDashboardViewUrl("desired-state", "desired-state-nodes", node.nodeId),
+        selectedNode?.nodeId === node.nodeId,
+        copy.selectedStateLabel
+      ),
       escapeHtml(node.hostname),
       `<span class="mono">${escapeHtml(node.publicIpv4)}</span>`,
       `<span class="mono">${escapeHtml(node.wireguardAddress)}</span>`
@@ -1285,7 +1542,12 @@ function renderDesiredStateSection(
   }));
   const backupTableRows: DataTableRow[] = data.desiredState.spec.backupPolicies.map((policy) => ({
     cells: [
-      `<span class="mono">${escapeHtml(policy.policySlug)}</span>`,
+      renderFocusLink(
+        policy.policySlug,
+        buildDashboardViewUrl("desired-state", "desired-state-backups", policy.policySlug),
+        selectedBackupPolicy?.policySlug === policy.policySlug,
+        copy.selectedStateLabel
+      ),
       escapeHtml(policy.tenantSlug),
       `<span class="mono">${escapeHtml(policy.targetNodeId)}</span>`,
       `<span class="mono">${escapeHtml(policy.schedule)}</span>`,
@@ -1300,100 +1562,196 @@ function renderDesiredStateSection(
       policy.resourceSelectors.join(" ")
     ].join(" ").toLowerCase()
   }));
-  const tenantRows = data.desiredState.spec.tenants
-    .map(
-      (tenant) => `<details>
-        <summary>${escapeHtml(tenant.slug)}</summary>
+  const tenantAppCount = (tenantSlug: string): number =>
+    data.desiredState.spec.apps.filter((app) => app.tenantSlug === tenantSlug).length;
+  const tenantZoneCount = (tenantSlug: string): number =>
+    data.desiredState.spec.zones.filter((zone) => zone.tenantSlug === tenantSlug).length;
+  const tenantBackupCount = (tenantSlug: string): number =>
+    data.desiredState.spec.backupPolicies.filter((policy) => policy.tenantSlug === tenantSlug).length;
+  const nodePrimaryAppCount = (nodeId: string): number =>
+    data.desiredState.spec.apps.filter((app) => app.primaryNodeId === nodeId).length;
+  const nodeBackupCount = (nodeId: string): number =>
+    data.desiredState.spec.backupPolicies.filter((policy) => policy.targetNodeId === nodeId).length;
+  const nodePrimaryZoneCount = (nodeId: string): number =>
+    data.desiredState.spec.zones.filter((zone) => zone.primaryNodeId === nodeId).length;
+
+  const tenantDetailPanel = selectedTenant
+    ? `<article class="panel detail-shell">
+        <div class="section-head">
+          <div>
+            <h3>${escapeHtml(copy.selectedResourceTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.selectedResourceDescription)}</p>
+          </div>
+        </div>
+        <div>
+          <h3>${escapeHtml(selectedTenant.displayName)}</h3>
+          <p class="muted">${escapeHtml(selectedTenant.slug)}</p>
+        </div>
+        ${renderDetailGrid([
+          { label: copy.tenantColSlug, value: `<span class="mono">${escapeHtml(selectedTenant.slug)}</span>` },
+          { label: copy.tenantColDisplayName, value: escapeHtml(selectedTenant.displayName) },
+          { label: copy.navApps, value: renderPill(String(tenantAppCount(selectedTenant.slug)), tenantAppCount(selectedTenant.slug) > 0 ? "success" : "muted") },
+          { label: copy.navZones, value: renderPill(String(tenantZoneCount(selectedTenant.slug)), tenantZoneCount(selectedTenant.slug) > 0 ? "success" : "muted") },
+          { label: copy.navBackupPolicies, value: renderPill(String(tenantBackupCount(selectedTenant.slug)), tenantBackupCount(selectedTenant.slug) > 0 ? "success" : "muted") }
+        ])}
+      </article>`
+    : "";
+
+  const tenantEditorPanel = selectedTenant
+    ? `<article class="panel detail-shell">
+        <div class="section-head">
+          <div>
+            <h3>${escapeHtml(copy.desiredStateEditorsTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.desiredStateEditorsDescription)}</p>
+          </div>
+        </div>
         <form method="post" action="/resources/tenants/upsert" class="stack">
-          <input type="hidden" name="originalSlug" value="${escapeHtml(tenant.slug)}" />
+          <input type="hidden" name="originalSlug" value="${escapeHtml(selectedTenant.slug)}" />
           <div class="form-grid">
             <label>Slug
-              <input name="slug" value="${escapeHtml(tenant.slug)}" required />
+              <input name="slug" value="${escapeHtml(selectedTenant.slug)}" required spellcheck="false" />
             </label>
             <label>Display name
-              <input name="displayName" value="${escapeHtml(tenant.displayName)}" required />
+              <input name="displayName" value="${escapeHtml(selectedTenant.displayName)}" required />
             </label>
           </div>
           <div class="toolbar">
             <button type="submit">Save tenant</button>
-            <button class="danger" type="submit" formaction="/resources/tenants/delete">Delete tenant</button>
+            <button class="danger" type="submit" formaction="/resources/tenants/delete" data-confirm="${escapeHtml(
+              `Delete tenant ${selectedTenant.slug}?`
+            )}">Delete tenant</button>
           </div>
         </form>
-      </details>`
-    )
-    .join("");
+      </article>`
+    : "";
 
-  const nodeRows = data.desiredState.spec.nodes
-    .map(
-      (node) => `<details>
-        <summary>${escapeHtml(node.nodeId)} <span class="muted">(${escapeHtml(node.hostname)})</span></summary>
+  const nodeDetailPanel = selectedNode
+    ? `<article class="panel detail-shell">
+        <div class="section-head">
+          <div>
+            <h3>${escapeHtml(copy.selectedResourceTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.selectedResourceDescription)}</p>
+          </div>
+        </div>
+        <div>
+          <h3>${escapeHtml(selectedNode.hostname)}</h3>
+          <p class="muted">${escapeHtml(selectedNode.nodeId)}</p>
+        </div>
+        ${renderDetailGrid([
+          { label: copy.nodeColNode, value: `<span class="mono">${escapeHtml(selectedNode.nodeId)}</span>` },
+          { label: copy.nodeColHostname, value: escapeHtml(selectedNode.hostname) },
+          { label: copy.nodeSpecColPublicIpv4, value: `<span class="mono">${escapeHtml(selectedNode.publicIpv4)}</span>` },
+          { label: copy.nodeSpecColWireguard, value: `<span class="mono">${escapeHtml(selectedNode.wireguardAddress)}</span>` },
+          { label: copy.navApps, value: renderPill(String(nodePrimaryAppCount(selectedNode.nodeId)), nodePrimaryAppCount(selectedNode.nodeId) > 0 ? "success" : "muted") },
+          { label: copy.navZones, value: renderPill(String(nodePrimaryZoneCount(selectedNode.nodeId)), nodePrimaryZoneCount(selectedNode.nodeId) > 0 ? "success" : "muted") },
+          { label: copy.navBackupPolicies, value: renderPill(String(nodeBackupCount(selectedNode.nodeId)), nodeBackupCount(selectedNode.nodeId) > 0 ? "success" : "muted") }
+        ])}
+      </article>`
+    : "";
+
+  const nodeEditorPanel = selectedNode
+    ? `<article class="panel detail-shell">
+        <div class="section-head">
+          <div>
+            <h3>${escapeHtml(copy.desiredStateEditorsTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.desiredStateEditorsDescription)}</p>
+          </div>
+        </div>
         <form method="post" action="/resources/nodes/upsert" class="stack">
-          <input type="hidden" name="originalNodeId" value="${escapeHtml(node.nodeId)}" />
+          <input type="hidden" name="originalNodeId" value="${escapeHtml(selectedNode.nodeId)}" />
           <div class="form-grid">
             <label>Node ID
-              <input name="nodeId" value="${escapeHtml(node.nodeId)}" required />
+              <input name="nodeId" value="${escapeHtml(selectedNode.nodeId)}" required spellcheck="false" />
             </label>
             <label>Hostname
-              <input name="hostname" value="${escapeHtml(node.hostname)}" required />
+              <input name="hostname" value="${escapeHtml(selectedNode.hostname)}" required spellcheck="false" />
             </label>
             <label>Public IPv4
-              <input name="publicIpv4" value="${escapeHtml(node.publicIpv4)}" required />
+              <input name="publicIpv4" value="${escapeHtml(selectedNode.publicIpv4)}" required spellcheck="false" />
             </label>
             <label>WireGuard address
-              <input name="wireguardAddress" value="${escapeHtml(node.wireguardAddress)}" required />
+              <input name="wireguardAddress" value="${escapeHtml(selectedNode.wireguardAddress)}" required spellcheck="false" />
             </label>
           </div>
           <div class="toolbar">
             <button type="submit">Save node</button>
-            <button class="danger" type="submit" formaction="/resources/nodes/delete">Delete node</button>
+            <button class="danger" type="submit" formaction="/resources/nodes/delete" data-confirm="${escapeHtml(
+              `Delete node ${selectedNode.nodeId}?`
+            )}">Delete node</button>
           </div>
         </form>
-      </details>`
-    )
-    .join("");
+      </article>`
+    : "";
 
-  const backupRows = data.desiredState.spec.backupPolicies
-    .map(
-      (policy) => `<details>
-        <summary>${escapeHtml(policy.policySlug)}</summary>
+  const backupDetailPanel = selectedBackupPolicy
+    ? `<article class="panel detail-shell">
+        <div class="section-head">
+          <div>
+            <h3>${escapeHtml(copy.selectedResourceTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.selectedResourceDescription)}</p>
+          </div>
+        </div>
+        <div>
+          <h3>${escapeHtml(selectedBackupPolicy.policySlug)}</h3>
+          <p class="muted">${escapeHtml(selectedBackupPolicy.storageLocation)}</p>
+        </div>
+        ${renderDetailGrid([
+          { label: copy.backupPolicyColTenant, value: escapeHtml(selectedBackupPolicy.tenantSlug) },
+          { label: copy.backupPolicyColTargetNode, value: `<span class="mono">${escapeHtml(selectedBackupPolicy.targetNodeId)}</span>` },
+          { label: copy.backupPolicyColSchedule, value: `<span class="mono">${escapeHtml(selectedBackupPolicy.schedule)}</span>` },
+          { label: copy.backupPolicyColRetention, value: renderPill(String(selectedBackupPolicy.retentionDays), selectedBackupPolicy.retentionDays > 0 ? "success" : "muted") },
+          { label: copy.storageRootLabel, value: `<span class="mono">${escapeHtml(selectedBackupPolicy.storageLocation)}</span>` },
+          { label: copy.recordPreviewTitle, value: escapeHtml(selectedBackupPolicy.resourceSelectors.join(", ") || copy.none) }
+        ])}
+      </article>`
+    : "";
+
+  const backupEditorPanel = selectedBackupPolicy
+    ? `<article class="panel detail-shell">
+        <div class="section-head">
+          <div>
+            <h3>${escapeHtml(copy.desiredStateEditorsTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.desiredStateEditorsDescription)}</p>
+          </div>
+        </div>
         <form method="post" action="/resources/backups/upsert" class="stack">
-          <input type="hidden" name="originalPolicySlug" value="${escapeHtml(policy.policySlug)}" />
+          <input type="hidden" name="originalPolicySlug" value="${escapeHtml(selectedBackupPolicy.policySlug)}" />
           <div class="form-grid">
             <label>Policy slug
-              <input name="policySlug" value="${escapeHtml(policy.policySlug)}" required />
+              <input name="policySlug" value="${escapeHtml(selectedBackupPolicy.policySlug)}" required spellcheck="false" />
             </label>
             <label>Tenant slug
               <select name="tenantSlug" required>
-                ${renderSelectOptions(tenantOptions, policy.tenantSlug)}
+                ${renderSelectOptions(tenantOptions, selectedBackupPolicy.tenantSlug)}
               </select>
             </label>
             <label>Target node
               <select name="targetNodeId" required>
-                ${renderSelectOptions(nodeOptions, policy.targetNodeId)}
+                ${renderSelectOptions(nodeOptions, selectedBackupPolicy.targetNodeId)}
               </select>
             </label>
             <label>Schedule
-              <input name="schedule" value="${escapeHtml(policy.schedule)}" required />
+              <input name="schedule" value="${escapeHtml(selectedBackupPolicy.schedule)}" required />
             </label>
             <label>Retention days
-              <input type="number" name="retentionDays" value="${escapeHtml(String(policy.retentionDays))}" required />
+              <input type="number" name="retentionDays" min="1" value="${escapeHtml(String(selectedBackupPolicy.retentionDays))}" required />
             </label>
             <label>Storage location
-              <input name="storageLocation" value="${escapeHtml(policy.storageLocation)}" required />
+              <input name="storageLocation" value="${escapeHtml(selectedBackupPolicy.storageLocation)}" required />
             </label>
             <label>Resource selectors
-              <input name="resourceSelectors" value="${escapeHtml(policy.resourceSelectors.join(", "))}" />
+              <input name="resourceSelectors" value="${escapeHtml(selectedBackupPolicy.resourceSelectors.join(", "))}" />
             </label>
           </div>
           <div class="toolbar">
             <button type="submit">Save backup policy</button>
-            <button class="danger" type="submit" formaction="/resources/backups/delete">Delete backup policy</button>
+            <button class="danger" type="submit" formaction="/resources/backups/delete" data-confirm="${escapeHtml(
+              `Delete backup policy ${selectedBackupPolicy.policySlug}?`
+            )}">Delete backup policy</button>
           </div>
         </form>
-      </details>`
-    )
-    .join("");
-
+      </article>`
+    : "";
   const zoneDetailPanel = selectedZone
     ? `<article class="panel detail-shell">
         <div class="section-head">
@@ -1428,7 +1786,8 @@ function renderDesiredStateSection(
             ${renderActionForm(
               "/actions/zone-sync",
               { zoneName: selectedZone.zoneName },
-              copy.actionDispatchDnsSync
+              copy.actionDispatchDnsSync,
+              { confirmMessage: `Dispatch dns.sync for zone ${selectedZone.zoneName}?` }
             )}
           </div>
         </div>
@@ -1475,7 +1834,7 @@ function renderDesiredStateSection(
           <input type="hidden" name="originalZoneName" value="${escapeHtml(selectedZone.zoneName)}" />
           <div class="form-grid">
             <label>Zone name
-              <input name="zoneName" value="${escapeHtml(selectedZone.zoneName)}" required />
+              <input name="zoneName" value="${escapeHtml(selectedZone.zoneName)}" required spellcheck="false" />
             </label>
             <label>Tenant slug
               <select name="tenantSlug" required>
@@ -1495,8 +1854,12 @@ function renderDesiredStateSection(
           </label>
           <div class="toolbar">
             <button type="submit">Save zone</button>
-            <button class="secondary" type="submit" formaction="/actions/zone-sync">Dispatch dns.sync</button>
-            <button class="danger" type="submit" formaction="/resources/zones/delete">Delete zone</button>
+            <button class="secondary" type="submit" formaction="/actions/zone-sync" data-confirm="${escapeHtml(
+              `Dispatch dns.sync for zone ${selectedZone.zoneName}?`
+            )}">Dispatch dns.sync</button>
+            <button class="danger" type="submit" formaction="/resources/zones/delete" data-confirm="${escapeHtml(
+              `Delete zone ${selectedZone.zoneName}?`
+            )}">Delete zone</button>
           </div>
         </form>
       </article>`
@@ -1563,12 +1926,14 @@ function renderDesiredStateSection(
               ${renderActionForm(
                 "/actions/app-reconcile",
                 { slug: selectedApp.slug },
-                copy.actionFullReconcile
+                copy.actionFullReconcile,
+                { confirmMessage: `Run full reconcile for app ${selectedApp.slug}?` }
               )}
               ${renderActionForm(
                 "/actions/app-render-proxy",
                 { slug: selectedApp.slug },
-                copy.actionDispatchProxyRender
+                copy.actionDispatchProxyRender,
+                { confirmMessage: `Dispatch proxy.render for app ${selectedApp.slug}?` }
               )}
             </div>
           </article>
@@ -1588,7 +1953,7 @@ function renderDesiredStateSection(
           <input type="hidden" name="originalSlug" value="${escapeHtml(selectedApp.slug)}" />
           <div class="form-grid">
             <label>Slug
-              <input name="slug" value="${escapeHtml(selectedApp.slug)}" required />
+              <input name="slug" value="${escapeHtml(selectedApp.slug)}" required spellcheck="false" />
             </label>
             <label>Tenant slug
               <select name="tenantSlug" required>
@@ -1614,13 +1979,13 @@ function renderDesiredStateSection(
               </select>
             </label>
             <label>Canonical domain
-              <input name="canonicalDomain" value="${escapeHtml(selectedApp.canonicalDomain)}" required />
+              <input name="canonicalDomain" value="${escapeHtml(selectedApp.canonicalDomain)}" required spellcheck="false" />
             </label>
             <label>Aliases
               <input name="aliases" value="${escapeHtml(selectedApp.aliases.join(", "))}" />
             </label>
             <label>Backend port
-              <input name="backendPort" type="number" value="${escapeHtml(String(selectedApp.backendPort))}" required />
+              <input name="backendPort" type="number" min="1" max="65535" value="${escapeHtml(String(selectedApp.backendPort))}" required />
             </label>
             <label>Runtime image
               <input name="runtimeImage" value="${escapeHtml(selectedApp.runtimeImage)}" required />
@@ -1637,9 +2002,15 @@ function renderDesiredStateSection(
           </div>
           <div class="toolbar">
             <button type="submit">Save app</button>
-            <button class="secondary" type="submit" formaction="/actions/app-reconcile">Full reconcile</button>
-            <button class="secondary" type="submit" formaction="/actions/app-render-proxy">Dispatch proxy.render</button>
-            <button class="danger" type="submit" formaction="/resources/apps/delete">Delete app</button>
+            <button class="secondary" type="submit" formaction="/actions/app-reconcile" data-confirm="${escapeHtml(
+              `Run full reconcile for app ${selectedApp.slug}?`
+            )}">Full reconcile</button>
+            <button class="secondary" type="submit" formaction="/actions/app-render-proxy" data-confirm="${escapeHtml(
+              `Dispatch proxy.render for app ${selectedApp.slug}?`
+            )}">Dispatch proxy.render</button>
+            <button class="danger" type="submit" formaction="/resources/apps/delete" data-confirm="${escapeHtml(
+              `Delete app ${selectedApp.slug}?`
+            )}">Delete app</button>
           </div>
         </form>
       </article>`
@@ -1703,7 +2074,10 @@ function renderDesiredStateSection(
               ${renderActionForm(
                 "/actions/database-reconcile",
                 { appSlug: selectedDatabase.appSlug },
-                copy.actionDispatchDatabaseReconcile
+                copy.actionDispatchDatabaseReconcile,
+                {
+                  confirmMessage: `Dispatch database reconcile for ${selectedDatabase.appSlug}?`
+                }
               )}
             </div>
           </article>
@@ -1734,10 +2108,10 @@ function renderDesiredStateSection(
               </select>
             </label>
             <label>Database name
-              <input name="databaseName" value="${escapeHtml(selectedDatabase.databaseName)}" required />
+              <input name="databaseName" value="${escapeHtml(selectedDatabase.databaseName)}" required spellcheck="false" />
             </label>
             <label>Database user
-              <input name="databaseUser" value="${escapeHtml(selectedDatabase.databaseUser)}" required />
+              <input name="databaseUser" value="${escapeHtml(selectedDatabase.databaseUser)}" required spellcheck="false" />
             </label>
             <label>Primary node
               <select name="primaryNodeId" required>
@@ -1761,8 +2135,12 @@ function renderDesiredStateSection(
           </div>
           <div class="toolbar">
             <button type="submit">Save database</button>
-            <button class="secondary" type="submit" formaction="/actions/database-reconcile">Dispatch database reconcile</button>
-            <button class="danger" type="submit" formaction="/resources/databases/delete">Delete database</button>
+            <button class="secondary" type="submit" formaction="/actions/database-reconcile" data-confirm="${escapeHtml(
+              `Dispatch database reconcile for ${selectedDatabase.appSlug}?`
+            )}">Dispatch database reconcile</button>
+            <button class="danger" type="submit" formaction="/resources/databases/delete" data-confirm="${escapeHtml(
+              `Delete database ${selectedDatabase.databaseName}?`
+            )}">Delete database</button>
           </div>
         </form>
       </article>`
@@ -1774,7 +2152,7 @@ function renderDesiredStateSection(
         <form method="post" action="/resources/tenants/upsert" class="stack">
           <div class="form-grid">
             <label>Slug
-              <input name="slug" required />
+              <input name="slug" required spellcheck="false" />
             </label>
             <label>Display name
               <input name="displayName" required />
@@ -1788,16 +2166,16 @@ function renderDesiredStateSection(
         <form method="post" action="/resources/nodes/upsert" class="stack">
           <div class="form-grid">
             <label>Node ID
-              <input name="nodeId" required />
+              <input name="nodeId" required spellcheck="false" />
             </label>
             <label>Hostname
-              <input name="hostname" required />
+              <input name="hostname" required spellcheck="false" />
             </label>
             <label>Public IPv4
-              <input name="publicIpv4" required />
+              <input name="publicIpv4" required spellcheck="false" />
             </label>
             <label>WireGuard address
-              <input name="wireguardAddress" required />
+              <input name="wireguardAddress" required spellcheck="false" />
             </label>
           </div>
           <button type="submit">Create node</button>
@@ -1808,7 +2186,7 @@ function renderDesiredStateSection(
         <form method="post" action="/resources/zones/upsert" class="stack">
           <div class="form-grid">
             <label>Zone name
-              <input name="zoneName" required />
+              <input name="zoneName" required spellcheck="false" />
             </label>
             <label>Tenant slug
               <select name="tenantSlug" required>
@@ -1832,7 +2210,7 @@ function renderDesiredStateSection(
         <form method="post" action="/resources/apps/upsert" class="stack">
           <div class="form-grid">
             <label>Slug
-              <input name="slug" required />
+              <input name="slug" required spellcheck="false" />
             </label>
             <label>Tenant slug
               <select name="tenantSlug" required>
@@ -1858,13 +2236,13 @@ function renderDesiredStateSection(
               </select>
             </label>
             <label>Canonical domain
-              <input name="canonicalDomain" required />
+              <input name="canonicalDomain" required spellcheck="false" />
             </label>
             <label>Aliases
               <input name="aliases" />
             </label>
             <label>Backend port
-              <input type="number" name="backendPort" required />
+              <input type="number" name="backendPort" min="1" max="65535" required />
             </label>
             <label>Runtime image
               <input name="runtimeImage" required />
@@ -1898,10 +2276,10 @@ function renderDesiredStateSection(
               </select>
             </label>
             <label>Database name
-              <input name="databaseName" required />
+              <input name="databaseName" required spellcheck="false" />
             </label>
             <label>Database user
-              <input name="databaseUser" required />
+              <input name="databaseUser" required spellcheck="false" />
             </label>
             <label>Primary node
               <select name="primaryNodeId" required>
@@ -1947,7 +2325,7 @@ function renderDesiredStateSection(
               <input name="schedule" placeholder="0 */6 * * *" required />
             </label>
             <label>Retention days
-              <input type="number" name="retentionDays" required />
+              <input type="number" name="retentionDays" min="1" required />
             </label>
             <label>Storage location
               <input name="storageLocation" required />
@@ -1992,7 +2370,10 @@ function renderDesiredStateSection(
           recordsLabel: copy.records,
           defaultPageSize: 10
         })}
-        ${renderEditorPanel("desired-state-tenants-editors", tenantRows, copy.noTenants)}
+        <div class="grid grid-two">
+          ${tenantDetailPanel || `<article class="panel"><p class="empty">${escapeHtml(copy.noTenants)}</p></article>`}
+          ${tenantEditorPanel || `<article class="panel"><p class="empty">${escapeHtml(copy.noTenants)}</p></article>`}
+        </div>
       </div>`
     },
     {
@@ -2020,7 +2401,10 @@ function renderDesiredStateSection(
           recordsLabel: copy.records,
           defaultPageSize: 10
         })}
-        ${renderEditorPanel("desired-state-nodes-editors", nodeRows, copy.noNodes)}
+        <div class="grid grid-two">
+          ${nodeDetailPanel || `<article class="panel"><p class="empty">${escapeHtml(copy.noNodes)}</p></article>`}
+          ${nodeEditorPanel || `<article class="panel"><p class="empty">${escapeHtml(copy.noNodes)}</p></article>`}
+        </div>
       </div>`
     },
     {
@@ -2145,7 +2529,10 @@ function renderDesiredStateSection(
           recordsLabel: copy.records,
           defaultPageSize: 10
         })}
-        ${renderEditorPanel("desired-state-backups-editors", backupRows, copy.noBackupPolicies)}
+        <div class="grid grid-two">
+          ${backupDetailPanel || `<article class="panel"><p class="empty">${escapeHtml(copy.noBackupPolicies)}</p></article>`}
+          ${backupEditorPanel || `<article class="panel"><p class="empty">${escapeHtml(copy.noBackupPolicies)}</p></article>`}
+        </div>
       </div>`
     }
   ];
@@ -2165,13 +2552,22 @@ function renderDashboard(
   currentPath: string,
   view: DashboardView,
   desiredStateTab: DesiredStateTabId,
-  desiredStateFocus: string | undefined,
+  focus: string | undefined,
   notice?: PanelNotice
 ): string {
   const copy = copyByLocale[locale];
+  const selectedNodeHealth =
+    view === "node-health"
+      ? data.nodeHealth.find((node) => node.nodeId === focus) ?? data.nodeHealth[0]
+      : undefined;
   const nodeHealthRows: DataTableRow[] = data.nodeHealth.map((node) => ({
     cells: [
-      `<span class="mono">${escapeHtml(node.nodeId)}</span>`,
+      renderFocusLink(
+        node.nodeId,
+        buildDashboardViewUrl("node-health", undefined, node.nodeId),
+        selectedNodeHealth?.nodeId === node.nodeId,
+        copy.selectedStateLabel
+      ),
       escapeHtml(node.hostname),
       node.currentVersion ? renderPill(node.currentVersion, "muted") : "-",
       renderPill(String(node.pendingJobCount), node.pendingJobCount > 0 ? "danger" : "success"),
@@ -2193,7 +2589,8 @@ function renderDashboard(
       node.hostname,
       node.currentVersion ?? "",
       node.latestJobStatus ?? "",
-      node.latestJobSummary ?? ""
+      node.latestJobSummary ?? "",
+      String(node.driftedResourceCount ?? 0)
     ].join(" ")
   }));
 
@@ -2227,9 +2624,18 @@ function renderDashboard(
     ].join(" ")
   }));
 
+  const selectedJob =
+    view === "job-history"
+      ? data.jobHistory.find((job) => job.jobId === focus) ?? data.jobHistory[0]
+      : undefined;
   const jobRows: DataTableRow[] = data.jobHistory.map((job) => ({
     cells: [
-      `<span class="mono">${escapeHtml(job.jobId)}</span>`,
+      renderFocusLink(
+        job.jobId,
+        buildDashboardViewUrl("job-history", undefined, job.jobId),
+        selectedJob?.jobId === job.jobId,
+        copy.selectedStateLabel
+      ),
       escapeHtml(job.kind),
       `<span class="mono">${escapeHtml(job.nodeId)}</span>`,
       job.status
@@ -2252,7 +2658,8 @@ function renderDashboard(
       job.nodeId,
       job.status ?? "queued",
       job.dispatchReason ?? "",
-      job.summary ?? ""
+      job.summary ?? "",
+      job.resourceKey ?? ""
     ].join(" ")
   }));
 
@@ -2310,6 +2717,34 @@ function renderDashboard(
         )
         .join("")}
     </dl>`;
+  const selectedNodeDrift = selectedNodeHealth
+    ? data.drift.filter((entry) => entry.nodeId === selectedNodeHealth.nodeId)
+    : [];
+  const selectedNodeJobs = selectedNodeHealth
+    ? data.jobHistory.filter((job) => job.nodeId === selectedNodeHealth.nodeId).slice(0, 6)
+    : [];
+  const selectedNodeAuditEvents = selectedNodeHealth
+    ? data.auditEvents
+        .filter(
+          (event) =>
+            event.entityId === selectedNodeHealth.nodeId ||
+            event.actorId === selectedNodeHealth.nodeId ||
+            payloadContainsValue(event.payload, selectedNodeHealth.nodeId)
+        )
+        .slice(0, 8)
+    : [];
+  const selectedJobAuditEvents = selectedJob
+    ? data.auditEvents
+        .filter(
+          (event) =>
+            event.entityId === selectedJob.jobId ||
+            payloadContainsValue(event.payload, selectedJob.jobId) ||
+            (selectedJob.resourceKey
+              ? payloadContainsValue(event.payload, selectedJob.resourceKey)
+              : false)
+        )
+        .slice(0, 8)
+    : [];
 
   const actionBar = `<div class="action-grid">
     <article class="action-card action-card-strong">
@@ -2329,7 +2764,7 @@ function renderDashboard(
       <h3>${escapeHtml(copy.actionsImportInventory)}</h3>
       <p class="muted">${escapeHtml(copy.actionImportDescription)}</p>
       <div class="action-card-context">
-        <span class="action-card-context-title">${escapeHtml(copy.inventoryImport)}</span>
+        <span class="action-card-context-title">${escapeHtml(copy.bootstrapInventoryTitle)}</span>
         ${renderActionFacts([
           { label: copy.latestImport, value: escapeHtml(latestImportSummary) },
           {
@@ -2349,6 +2784,7 @@ function renderDashboard(
         <input type="text" name="path" value="${escapeHtml(
           data.inventory.latestImport?.sourcePath ?? config.inventory.importPath
         )}" />
+        <p class="muted">${escapeHtml(copy.bootstrapInventoryDescription)}</p>
         <button class="secondary" type="submit">${escapeHtml(copy.actionsImportInventory)}</button>
       </form>
     </article>
@@ -2573,28 +3009,184 @@ function renderDashboard(
     ${actionBar}
   </section>`;
 
-  const nodeHealthSection = renderDataTable({
-    id: "section-node-health",
-    heading: copy.nodeHealthTitle,
-    description: copy.nodeHealthDescription,
-    columns: [
-      { label: copy.nodeColNode, className: "mono" },
-      { label: copy.nodeColHostname },
-      { label: copy.nodeColVersion },
-      { label: copy.nodeColPending },
-      { label: copy.nodeColLatestStatus },
-      { label: copy.nodeColLatestSummary },
-      { label: copy.nodeColLastSeen }
-    ],
-    rows: nodeHealthRows,
-    emptyMessage: copy.noNodes,
-    filterPlaceholder: copy.dataFilterPlaceholder,
-    rowsPerPageLabel: copy.rowsPerPage,
-    showingLabel: copy.showing,
-    ofLabel: copy.of,
-    recordsLabel: copy.records,
-    defaultPageSize: 10
-  });
+  const nodeDiagnosticsPanel = selectedNodeHealth
+    ? `<article class="panel detail-shell">
+        <div class="section-head">
+          <div>
+            <h3>${escapeHtml(copy.nodeDiagnosticsTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.nodeDiagnosticsDescription)}</p>
+          </div>
+          <a class="button-link secondary" href="${escapeHtml(
+            buildDashboardViewUrl("desired-state", "desired-state-nodes", selectedNodeHealth.nodeId)
+          )}">${escapeHtml(copy.navNodes)}</a>
+        </div>
+        ${renderDetailGrid([
+          { label: copy.nodeColNode, value: `<span class="mono">${escapeHtml(selectedNodeHealth.nodeId)}</span>` },
+          { label: copy.nodeColHostname, value: escapeHtml(selectedNodeHealth.hostname) },
+          {
+            label: copy.nodeColVersion,
+            value: selectedNodeHealth.currentVersion
+              ? renderPill(selectedNodeHealth.currentVersion, "muted")
+              : "-"
+          },
+          {
+            label: copy.nodeColPending,
+            value: renderPill(
+              String(selectedNodeHealth.pendingJobCount),
+              selectedNodeHealth.pendingJobCount > 0 ? "danger" : "success"
+            )
+          },
+          {
+            label: copy.resourcesWithDrift,
+            value: renderPill(
+              String(selectedNodeHealth.driftedResourceCount ?? 0),
+              (selectedNodeHealth.driftedResourceCount ?? 0) > 0 ? "danger" : "success"
+            )
+          },
+          {
+            label: copy.zoneColRecordCount,
+            value: escapeHtml(String(selectedNodeHealth.primaryZoneCount ?? 0))
+          },
+          {
+            label: copy.navApps,
+            value: escapeHtml(String(selectedNodeHealth.primaryAppCount ?? 0))
+          },
+          {
+            label: copy.backupPolicies,
+            value: escapeHtml(String(selectedNodeHealth.backupPolicyCount ?? 0))
+          },
+          {
+            label: copy.nodeColLastSeen,
+            value: escapeHtml(formatDate(selectedNodeHealth.lastSeenAt, locale))
+          }
+        ])}
+      </article>`
+    : `<article class="panel"><p class="empty">${escapeHtml(copy.noNodes)}</p></article>`;
+
+  const relatedNodeJobsPanel = `<article class="panel detail-shell">
+    <div class="section-head">
+      <div>
+        <h3>${escapeHtml(copy.relatedJobsTitle)}</h3>
+      </div>
+    </div>
+    ${renderFeedList(
+      selectedNodeJobs.map((job) => ({
+        title: escapeHtml(job.kind),
+        meta: escapeHtml(
+          [
+            job.jobId,
+            job.status ?? "queued",
+            formatDate(job.createdAt, locale)
+          ].join(" · ")
+        ),
+        summary: escapeHtml(job.summary ?? job.dispatchReason ?? "-"),
+        tone:
+          job.status === "failed"
+            ? "danger"
+            : job.status === "applied"
+              ? "success"
+              : "default"
+      }))
+    )}
+  </article>`;
+
+  const relatedNodeDriftPanel = `<article class="panel detail-shell">
+    <div class="section-head">
+      <div>
+        <h3>${escapeHtml(copy.relatedDriftTitle)}</h3>
+      </div>
+    </div>
+    ${renderFeedList(
+      selectedNodeDrift.map((entry) => ({
+        title: escapeHtml(`${entry.resourceKind} · ${entry.resourceKey}`),
+        meta: escapeHtml(entry.driftStatus),
+        summary: escapeHtml(entry.latestSummary ?? "-"),
+        tone: entry.driftStatus === "in_sync" ? "success" : "danger"
+      }))
+    )}
+  </article>`;
+
+  const selectedJobPanel = selectedJob
+    ? `<article class="panel detail-shell">
+        <div class="section-head">
+          <div>
+            <h3>${escapeHtml(copy.payloadTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.jobHistoryDescription)}</p>
+          </div>
+          <a class="button-link secondary" href="${escapeHtml(
+            buildDashboardViewUrl("node-health", undefined, selectedJob.nodeId)
+          )}">${escapeHtml(copy.nodeColNode)}</a>
+        </div>
+        ${renderDetailGrid([
+          { label: copy.jobColJob, value: `<span class="mono">${escapeHtml(selectedJob.jobId)}</span>` },
+          { label: copy.jobColKind, value: escapeHtml(selectedJob.kind) },
+          { label: copy.jobColNode, value: `<span class="mono">${escapeHtml(selectedJob.nodeId)}</span>` },
+          {
+            label: copy.jobColStatus,
+            value: selectedJob.status
+              ? renderPill(
+                  selectedJob.status,
+                  selectedJob.status === "applied"
+                    ? "success"
+                    : selectedJob.status === "failed"
+                      ? "danger"
+                      : "muted"
+                )
+              : renderPill("queued", "muted")
+          },
+          { label: copy.jobColReason, value: escapeHtml(selectedJob.dispatchReason ?? "-") },
+          { label: copy.jobColCreated, value: escapeHtml(formatDate(selectedJob.createdAt, locale)) }
+        ])}
+        <div class="grid grid-two">
+          <article class="panel detail-shell panel-nested">
+            <h4>${escapeHtml(copy.payloadTitle)}</h4>
+            ${renderCodeBlock(selectedJob.payload)}
+          </article>
+          <article class="panel detail-shell panel-nested">
+            <h4>${escapeHtml(copy.jobColSummary)}</h4>
+            <p>${escapeHtml(selectedJob.summary ?? "-")}</p>
+            ${selectedJob.details ? renderCodeBlock(selectedJob.details) : `<p class="muted">${escapeHtml(copy.none)}</p>`}
+          </article>
+        </div>
+      </article>`
+    : `<article class="panel"><p class="empty">${escapeHtml(copy.noJobs)}</p></article>`;
+
+  const nodeHealthSection = `<section id="section-node-health" class="panel section-panel">
+    ${renderDataTable({
+      id: "section-node-health-table",
+      heading: copy.nodeHealthTitle,
+      description: copy.nodeHealthDescription,
+      columns: [
+        { label: copy.nodeColNode, className: "mono" },
+        { label: copy.nodeColHostname },
+        { label: copy.nodeColVersion },
+        { label: copy.nodeColPending },
+        { label: copy.nodeColLatestStatus },
+        { label: copy.nodeColLatestSummary },
+        { label: copy.nodeColLastSeen }
+      ],
+      rows: nodeHealthRows,
+      emptyMessage: copy.noNodes,
+      filterPlaceholder: copy.dataFilterPlaceholder,
+      rowsPerPageLabel: copy.rowsPerPage,
+      showingLabel: copy.showing,
+      ofLabel: copy.of,
+      recordsLabel: copy.records,
+      defaultPageSize: 10
+    })}
+    <div class="grid grid-two">
+      ${nodeDiagnosticsPanel}
+      <div class="stack">
+        ${relatedNodeJobsPanel}
+        ${relatedNodeDriftPanel}
+        ${renderAuditPanel(
+          copy,
+          locale,
+          selectedNodeAuditEvents.length > 0 ? selectedNodeAuditEvents : data.auditEvents.slice(0, 6)
+        )}
+      </div>
+    </div>
+  </section>`;
 
   const resourceDriftSection = renderDataTable({
     id: "section-resource-drift",
@@ -2618,28 +3210,38 @@ function renderDashboard(
     defaultPageSize: 10
   });
 
-  const jobHistorySection = renderDataTable({
-    id: "section-job-history",
-    heading: copy.jobHistoryTitle,
-    description: copy.jobHistoryDescription,
-    columns: [
-      { label: copy.jobColJob, className: "mono" },
-      { label: copy.jobColKind },
-      { label: copy.jobColNode, className: "mono" },
-      { label: copy.jobColStatus },
-      { label: copy.jobColReason },
-      { label: copy.jobColSummary },
-      { label: copy.jobColCreated }
-    ],
-    rows: jobRows,
-    emptyMessage: copy.noJobs,
-    filterPlaceholder: copy.dataFilterPlaceholder,
-    rowsPerPageLabel: copy.rowsPerPage,
-    showingLabel: copy.showing,
-    ofLabel: copy.of,
-    recordsLabel: copy.records,
-    defaultPageSize: 10
-  });
+  const jobHistorySection = `<section id="section-job-history" class="panel section-panel">
+    ${renderDataTable({
+      id: "section-job-history-table",
+      heading: copy.jobHistoryTitle,
+      description: copy.jobHistoryDescription,
+      columns: [
+        { label: copy.jobColJob, className: "mono" },
+        { label: copy.jobColKind },
+        { label: copy.jobColNode, className: "mono" },
+        { label: copy.jobColStatus },
+        { label: copy.jobColReason },
+        { label: copy.jobColSummary },
+        { label: copy.jobColCreated }
+      ],
+      rows: jobRows,
+      emptyMessage: copy.noJobs,
+      filterPlaceholder: copy.dataFilterPlaceholder,
+      rowsPerPageLabel: copy.rowsPerPage,
+      showingLabel: copy.showing,
+      ofLabel: copy.of,
+      recordsLabel: copy.records,
+      defaultPageSize: 10
+    })}
+    <div class="grid grid-two">
+      ${selectedJobPanel}
+      ${renderAuditPanel(
+        copy,
+        locale,
+        selectedJobAuditEvents.length > 0 ? selectedJobAuditEvents : data.auditEvents.slice(0, 8)
+      )}
+    </div>
+  </section>`;
 
   const backupsSection = renderDataTable({
     id: "section-backups",
@@ -2666,7 +3268,7 @@ function renderDashboard(
     data,
     copy,
     desiredStateTab,
-    desiredStateFocus
+    focus
   );
 
   const body = (() => {
@@ -2713,6 +3315,7 @@ async function loadDashboardData(token: string): Promise<DashboardData> {
     drift,
     nodeHealth,
     jobHistory,
+    auditEvents,
     backups
   ] = await Promise.all([
     apiRequest<AuthenticatedUserSummary>("/v1/auth/me", { token }),
@@ -2722,6 +3325,7 @@ async function loadDashboardData(token: string): Promise<DashboardData> {
     apiRequest<ResourceDriftSummary[]>("/v1/resources/drift", { token }),
     apiRequest<NodeHealthSnapshot[]>("/v1/nodes/health", { token }),
     apiRequest<JobHistoryEntry[]>("/v1/jobs/history?limit=30", { token }),
+    apiRequest<AuditEventSummary[]>("/v1/audit/events?limit=30", { token }),
     apiRequest<BackupsOverview>("/v1/backups/summary", { token })
   ]);
 
@@ -2733,6 +3337,7 @@ async function loadDashboardData(token: string): Promise<DashboardData> {
     drift,
     nodeHealth,
     jobHistory,
+    auditEvents,
     backups
   };
 }
@@ -2794,41 +3399,66 @@ async function mutateDesiredState(
 
 function parseTenantForm(form: URLSearchParams): DesiredStateTenantInput {
   return {
-    slug: form.get("slug")?.trim() ?? "",
-    displayName: form.get("displayName")?.trim() ?? ""
+    slug: assertSlug(form.get("slug")?.trim() ?? "", "Tenant slug"),
+    displayName: assertRequired(form.get("displayName")?.trim() ?? "", "Display name")
   };
 }
 
 function parseNodeForm(form: URLSearchParams): DesiredStateNodeInput {
   return {
-    nodeId: form.get("nodeId")?.trim() ?? "",
-    hostname: form.get("hostname")?.trim() ?? "",
-    publicIpv4: form.get("publicIpv4")?.trim() ?? "",
-    wireguardAddress: form.get("wireguardAddress")?.trim() ?? ""
+    nodeId: assertSlug(form.get("nodeId")?.trim() ?? "", "Node ID"),
+    hostname: assertHostname(form.get("hostname")?.trim() ?? "", "Hostname"),
+    publicIpv4: assertIpv4(form.get("publicIpv4")?.trim() ?? "", "Public IPv4"),
+    wireguardAddress: assertWireguardAddress(
+      form.get("wireguardAddress")?.trim() ?? "",
+      "WireGuard address"
+    )
   };
 }
 
 function parseZoneForm(form: URLSearchParams): DesiredStateZoneInput {
   return {
-    zoneName: form.get("zoneName")?.trim() ?? "",
-    tenantSlug: form.get("tenantSlug")?.trim() ?? "",
-    primaryNodeId: form.get("primaryNodeId")?.trim() ?? "",
+    zoneName: assertDomain(form.get("zoneName")?.trim() ?? "", "Zone name"),
+    tenantSlug: assertSlug(form.get("tenantSlug")?.trim() ?? "", "Tenant slug"),
+    primaryNodeId: assertSlug(form.get("primaryNodeId")?.trim() ?? "", "Primary node"),
     records: parseZoneRecords(form.get("records")?.trim() ?? "")
   };
 }
 
 function parseAppForm(form: URLSearchParams): DesiredStateAppInput {
+  const slug = assertSlug(form.get("slug")?.trim() ?? "", "App slug");
+  const tenantSlug = assertSlug(form.get("tenantSlug")?.trim() ?? "", "Tenant slug");
+  const zoneName = assertDomain(form.get("zoneName")?.trim() ?? "", "Zone name");
+  const primaryNodeId = assertSlug(form.get("primaryNodeId")?.trim() ?? "", "Primary node");
+  const standbyNodeId = form.get("standbyNodeId")?.trim()
+    ? assertSlug(form.get("standbyNodeId")?.trim() ?? "", "Standby node")
+    : undefined;
+  const canonicalDomain = assertDomain(
+    form.get("canonicalDomain")?.trim() ?? "",
+    "Canonical domain"
+  );
+  const aliases = parseCommaSeparated(form.get("aliases") ?? "").map((alias) =>
+    assertDomain(alias, "Alias")
+  );
+  const backendPort = assertPositiveInt(
+    parseOptionalNumber(form.get("backendPort")?.trim() ?? ""),
+    "Backend port",
+    { min: 1, max: 65535 }
+  );
+  if (standbyNodeId && standbyNodeId === primaryNodeId) {
+    throw new Error("Standby node must differ from primary node.");
+  }
   return {
-    slug: form.get("slug")?.trim() ?? "",
-    tenantSlug: form.get("tenantSlug")?.trim() ?? "",
-    zoneName: form.get("zoneName")?.trim() ?? "",
-    primaryNodeId: form.get("primaryNodeId")?.trim() ?? "",
-    standbyNodeId: form.get("standbyNodeId")?.trim() || undefined,
-    canonicalDomain: form.get("canonicalDomain")?.trim() ?? "",
-    aliases: parseCommaSeparated(form.get("aliases") ?? ""),
-    backendPort: parseOptionalNumber(form.get("backendPort")?.trim() ?? "") ?? 0,
-    runtimeImage: form.get("runtimeImage")?.trim() ?? "",
-    storageRoot: form.get("storageRoot")?.trim() ?? "",
+    slug,
+    tenantSlug,
+    zoneName,
+    primaryNodeId,
+    standbyNodeId,
+    canonicalDomain,
+    aliases,
+    backendPort,
+    runtimeImage: assertRequired(form.get("runtimeImage")?.trim() ?? "", "Runtime image"),
+    storageRoot: assertRequired(form.get("storageRoot")?.trim() ?? "", "Storage root"),
     mode: form.get("mode")?.trim() ?? "active-passive"
   };
 }
@@ -2851,27 +3481,47 @@ function parseDatabaseForm(form: URLSearchParams): DesiredStateDatabaseInput {
 
   const pendingMigrationTo =
     pendingMigrationValue as DesiredStateDatabaseInput["pendingMigrationTo"];
+  const primaryNodeId = assertSlug(form.get("primaryNodeId")?.trim() ?? "", "Primary node");
+  const standbyNodeId = form.get("standbyNodeId")?.trim()
+    ? assertSlug(form.get("standbyNodeId")?.trim() ?? "", "Standby node")
+    : undefined;
+
+  if (standbyNodeId && standbyNodeId === primaryNodeId) {
+    throw new Error("Standby node must differ from primary node.");
+  }
+
+  if (pendingMigrationTo && pendingMigrationTo === engine) {
+    throw new Error("Pending migration target must differ from the current engine.");
+  }
 
   return {
-    appSlug: form.get("appSlug")?.trim() ?? "",
+    appSlug: assertSlug(form.get("appSlug")?.trim() ?? "", "App slug"),
     engine,
-    databaseName: form.get("databaseName")?.trim() ?? "",
-    databaseUser: form.get("databaseUser")?.trim() ?? "",
-    primaryNodeId: form.get("primaryNodeId")?.trim() ?? "",
-    standbyNodeId: form.get("standbyNodeId")?.trim() || undefined,
+    databaseName: assertRequired(form.get("databaseName")?.trim() ?? "", "Database name"),
+    databaseUser: assertRequired(form.get("databaseUser")?.trim() ?? "", "Database user"),
+    primaryNodeId,
+    standbyNodeId,
     pendingMigrationTo,
     desiredPassword: form.get("desiredPassword")?.trim() || undefined
   };
 }
 
 function parseBackupPolicyForm(form: URLSearchParams): DesiredStateBackupPolicyInput {
+  const retentionDays = assertPositiveInt(
+    parseOptionalNumber(form.get("retentionDays")?.trim() ?? ""),
+    "Retention days",
+    { min: 1 }
+  );
   return {
-    policySlug: form.get("policySlug")?.trim() ?? "",
-    tenantSlug: form.get("tenantSlug")?.trim() ?? "",
-    targetNodeId: form.get("targetNodeId")?.trim() ?? "",
-    schedule: form.get("schedule")?.trim() ?? "",
-    retentionDays: parseOptionalNumber(form.get("retentionDays")?.trim() ?? "") ?? 0,
-    storageLocation: form.get("storageLocation")?.trim() ?? "",
+    policySlug: assertSlug(form.get("policySlug")?.trim() ?? "", "Policy slug"),
+    tenantSlug: assertSlug(form.get("tenantSlug")?.trim() ?? "", "Tenant slug"),
+    targetNodeId: assertSlug(form.get("targetNodeId")?.trim() ?? "", "Target node"),
+    schedule: assertCronish(form.get("schedule")?.trim() ?? "", "Schedule"),
+    retentionDays,
+    storageLocation: assertRequired(
+      form.get("storageLocation")?.trim() ?? "",
+      "Storage location"
+    ),
     resourceSelectors: parseCommaSeparated(form.get("resourceSelectors") ?? "")
   };
 }
@@ -2892,7 +3542,7 @@ async function handleDashboard(request: IncomingMessage, response: ServerRespons
   const locale = readLocale(request);
   const view = normalizeDashboardView(url.searchParams.get("view"));
   const desiredStateTab = normalizeDesiredStateTab(url.searchParams.get("tab"));
-  const desiredStateFocus = normalizeDesiredStateFocus(url.searchParams.get("focus"));
+  const focus = normalizeDashboardFocus(url.searchParams.get("focus"));
 
   if (!token) {
     writeHtml(response, 200, renderLoginPage(locale, getNoticeFromUrl(url)));
@@ -2910,7 +3560,7 @@ async function handleDashboard(request: IncomingMessage, response: ServerRespons
         sanitizeReturnTo(`${url.pathname}${url.search}`),
         view,
         desiredStateTab,
-        desiredStateFocus,
+        focus,
         getNoticeFromUrl(url)
       )
     );

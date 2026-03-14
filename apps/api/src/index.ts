@@ -238,6 +238,19 @@ async function requestHandler(
     return;
   }
 
+  if (request.method === "GET" && url.pathname === "/v1/audit/events") {
+    const limit = Number.parseInt(url.searchParams.get("limit") ?? "50", 10);
+    writeJson(
+      response,
+      200,
+      await controlPlaneStore.listAuditEvents(
+        readBearerToken(request),
+        Number.isInteger(limit) ? limit : 50
+      )
+    );
+    return;
+  }
+
   if (request.method === "GET" && url.pathname === "/v1/backups/summary") {
     writeJson(
       response,
@@ -381,6 +394,7 @@ async function requestHandler(
         "GET /v1/operations/overview",
         "GET /v1/nodes/health",
         "GET /v1/jobs/history",
+        "GET /v1/audit/events",
         "GET /v1/backups/summary",
         "POST /v1/backups/runs",
         "GET /v1/control-plane/state",

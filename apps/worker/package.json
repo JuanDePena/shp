@@ -1,6 +1,6 @@
 {
   "name": "@simplehost/panel-worker",
-  "version": "2603.14.05",
+  "version": "2603.14.06",
   "private": true,
   "type": "module",
   "main": "dist/index.js",

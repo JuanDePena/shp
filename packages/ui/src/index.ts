@@ -1399,6 +1399,19 @@ ${renderBaseStyleBlock()}
           linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(250, 241, 229, 0.92));
       }
 
+      .action-card-muted {
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(233, 241, 250, 0.9)),
+          linear-gradient(135deg, rgba(16, 39, 68, 0.04), rgba(255, 255, 255, 0.98));
+        border-style: dashed;
+      }
+
+      .action-card-note {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+
       .action-eyebrow {
         color: var(--muted);
         font-size: 0.72rem;

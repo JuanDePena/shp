@@ -157,6 +157,10 @@ interface WebCopy {
   auditActorsDescription: string;
   desiredAppliedTitle: string;
   desiredAppliedDescription: string;
+  plannedChangesTitle: string;
+  plannedChangesDescription: string;
+  effectiveStateTitle: string;
+  effectiveStateDescription: string;
   comparisonFieldLabel: string;
   comparisonDesiredLabel: string;
   comparisonAppliedLabel: string;
@@ -164,8 +168,18 @@ interface WebCopy {
   comparisonMatchLabel: string;
   comparisonChangedLabel: string;
   comparisonUnknownLabel: string;
+  jobStatusesTitle: string;
+  jobStatusesDescription: string;
+  jobResourceHotspotsTitle: string;
+  jobResourceHotspotsDescription: string;
+  auditEntitiesTitle: string;
+  auditEntitiesDescription: string;
   backupCoverageTitle: string;
   backupCoverageDescription: string;
+  backupCoverageByTenantTitle: string;
+  backupCoverageByTenantDescription: string;
+  backupPolicySignalsTitle: string;
+  backupPolicySignalsDescription: string;
   backupTargetPostureTitle: string;
   backupTargetPostureDescription: string;
   backupRunSignalsTitle: string;
@@ -379,8 +393,8 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     actionDispatchProxyRender: "Dispatch proxy.render",
     actionDispatchDatabaseReconcile: "Dispatch database reconcile",
     actionPlanDescription: "Compare desired state against the last successful apply and dispatch missing work.",
-    actionImportDescription: "Use the transitional YAML import path to seed or recover PostgreSQL desired state.",
-    actionExportDescription: "Export the current desired state for audit, review, or disaster recovery.",
+  actionImportDescription: "Use the transitional YAML import path to seed or recover PostgreSQL desired state.",
+  actionExportDescription: "Export the current desired state for audit, review, or disaster recovery.",
     overviewTitle: "Operations overview",
     managedNodes: "Managed nodes",
     pendingJobs: "Pending jobs",
@@ -410,6 +424,12 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     desiredAppliedTitle: "Desired vs last applied",
     desiredAppliedDescription:
       "Compare the current desired definition with the latest successful job payload.",
+    plannedChangesTitle: "Planned changes",
+    plannedChangesDescription:
+      "Preview what the selected action is expected to touch before dispatching or deleting.",
+    effectiveStateTitle: "Effective state",
+    effectiveStateDescription:
+      "Current operational posture, most recent outcomes and related control-plane scope.",
     comparisonFieldLabel: "Field",
     comparisonDesiredLabel: "Desired",
     comparisonAppliedLabel: "Last applied",
@@ -417,8 +437,19 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     comparisonMatchLabel: "match",
     comparisonChangedLabel: "changed",
     comparisonUnknownLabel: "unknown",
+    jobStatusesTitle: "Job status mix",
+    jobStatusesDescription: "Current distribution of queued, applied and failed work.",
+    jobResourceHotspotsTitle: "Resource hotspots",
+    jobResourceHotspotsDescription: "Resources accumulating the most recent job activity.",
+    auditEntitiesTitle: "Audit entities",
+    auditEntitiesDescription: "Entities touched most often in the current audit slice.",
     backupCoverageTitle: "Coverage summary",
     backupCoverageDescription: "Policy reach, last known outcomes and tenant scope for backups.",
+    backupCoverageByTenantTitle: "Coverage by tenant",
+    backupCoverageByTenantDescription:
+      "Tenants currently protected by policy scope and their covered resource counts.",
+    backupPolicySignalsTitle: "Policy signals",
+    backupPolicySignalsDescription: "Policies with the busiest recent run history.",
     backupTargetPostureTitle: "Backup target posture",
     backupTargetPostureDescription:
       "Current target-node health, selected policy spread and latest known outcomes.",
@@ -666,6 +697,12 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     desiredAppliedTitle: "Deseado vs último aplicado",
     desiredAppliedDescription:
       "Compara la definición deseada actual con el payload del último job exitoso.",
+    plannedChangesTitle: "Cambios previstos",
+    plannedChangesDescription:
+      "Vista previa de lo que la acción seleccionada debería tocar antes de despachar o borrar.",
+    effectiveStateTitle: "Estado efectivo",
+    effectiveStateDescription:
+      "Postura operativa actual, últimos resultados y alcance relacionado del control plane.",
     comparisonFieldLabel: "Campo",
     comparisonDesiredLabel: "Deseado",
     comparisonAppliedLabel: "Último aplicado",
@@ -673,8 +710,19 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     comparisonMatchLabel: "coincide",
     comparisonChangedLabel: "cambió",
     comparisonUnknownLabel: "sin dato",
+    jobStatusesTitle: "Mezcla de estados de jobs",
+    jobStatusesDescription: "Distribución actual de trabajo en cola, aplicado y fallido.",
+    jobResourceHotspotsTitle: "Recursos más activos",
+    jobResourceHotspotsDescription: "Recursos que acumulan más actividad reciente de jobs.",
+    auditEntitiesTitle: "Entidades de auditoría",
+    auditEntitiesDescription: "Entidades tocadas con más frecuencia dentro del corte actual.",
     backupCoverageTitle: "Resumen de cobertura",
     backupCoverageDescription: "Alcance de políticas, últimos resultados conocidos y alcance por tenant para backups.",
+    backupCoverageByTenantTitle: "Cobertura por tenant",
+    backupCoverageByTenantDescription:
+      "Tenants protegidos actualmente por las políticas y sus recursos cubiertos.",
+    backupPolicySignalsTitle: "Señales por política",
+    backupPolicySignalsDescription: "Políticas con más actividad reciente de ejecuciones.",
     backupTargetPostureTitle: "Postura del destino de backup",
     backupTargetPostureDescription:
       "Salud actual del nodo destino, alcance de la política seleccionada y últimos resultados conocidos.",
@@ -1799,6 +1847,23 @@ function renderComparisonTable(
   </article>`;
 }
 
+function summarizeComparisonRows(copy: WebCopy, rows: ComparisonRow[]): string {
+  if (rows.length === 0) {
+    return copy.none;
+  }
+
+  const changed = rows.filter((row) => row.state === "changed").length;
+  const matched = rows.filter((row) => row.state === "match").length;
+  const unknown = rows.filter((row) => row.state === "unknown").length;
+  const parts = [
+    changed > 0 ? `${changed} ${copy.comparisonChangedLabel}` : "",
+    matched > 0 ? `${matched} ${copy.comparisonMatchLabel}` : "",
+    unknown > 0 ? `${unknown} ${copy.comparisonUnknownLabel}` : ""
+  ].filter(Boolean);
+
+  return parts.length > 0 ? parts.join(" · ") : copy.none;
+}
+
 function readStringPayloadValue(payload: Record<string, unknown> | undefined, key: string): string | null {
   const value = payload?.[key];
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -2355,6 +2420,9 @@ function renderDesiredStateSection(
   const selectedNodeDesiredAuditEvents = selectedNode
     ? findRelatedAuditEvents(data.auditEvents, [selectedNode.nodeId, selectedNode.hostname], 6)
     : [];
+  const selectedNodeDesiredDrift = selectedNode
+    ? data.drift.filter((entry) => entry.nodeId === selectedNode.nodeId)
+    : [];
   const selectedZoneJobs = selectedZone
     ? findRelatedJobs(
         data.jobHistory,
@@ -2654,6 +2722,187 @@ function renderDesiredStateSection(
           )
         ]
       : [];
+  const selectedTenantActionPreviewItems = selectedTenant
+    ? [
+        {
+          title: "metadata.update",
+          meta: escapeHtml(`${selectedTenant.slug} · ${selectedTenant.displayName}`),
+          summary: escapeHtml(
+            `${tenantAppCount(selectedTenant.slug)} app(s), ${tenantZoneCount(selectedTenant.slug)} zone(s) and ${tenantBackupCount(selectedTenant.slug)} backup polic(ies) remain attached to this tenant scope.`
+          ),
+          tone: "default" as const
+        },
+        {
+          title: "tenant.delete",
+          meta: escapeHtml("cascade"),
+          summary: escapeHtml(
+            `${tenantAppCount(selectedTenant.slug)} app(s), ${tenantZoneCount(selectedTenant.slug)} zone(s) and ${tenantBackupCount(selectedTenant.slug)} backup polic(ies) would be removed from desired state.`
+          ),
+          tone:
+            tenantAppCount(selectedTenant.slug) +
+              tenantZoneCount(selectedTenant.slug) +
+              tenantBackupCount(selectedTenant.slug) >
+            0
+              ? ("danger" as const)
+              : ("default" as const)
+        }
+      ]
+    : [];
+  const selectedNodeActionPreviewItems = selectedNode
+    ? [
+        {
+          title: "node.update",
+          meta: escapeHtml(`${selectedNode.hostname} · ${selectedNode.publicIpv4}`),
+          summary: escapeHtml(
+            `${nodePrimaryAppCount(selectedNode.nodeId)} app(s), ${nodePrimaryZoneCount(selectedNode.nodeId)} zone(s) and ${nodeBackupCount(selectedNode.nodeId)} backup polic(ies) currently target this node.`
+          ),
+          tone: "default" as const
+        },
+        {
+          title: "node.delete",
+          meta: escapeHtml("topology risk"),
+          summary: escapeHtml(
+            `${selectedNodeDesiredJobs.length} related job(s) and ${selectedNodeDesiredAuditEvents.length} audit event(s) reference this node.`
+          ),
+          tone:
+            nodePrimaryAppCount(selectedNode.nodeId) +
+              nodePrimaryZoneCount(selectedNode.nodeId) +
+              nodeBackupCount(selectedNode.nodeId) >
+            0
+              ? ("danger" as const)
+              : ("default" as const)
+        }
+      ]
+    : [];
+  const selectedZoneActionPreviewItems = selectedZone
+    ? [
+        {
+          title: "dns.sync",
+          meta: escapeHtml(`${selectedZone.primaryNodeId} · ${selectedZone.records.length} record(s)`),
+          summary: escapeHtml(
+            selectedZoneLatestAppliedDnsJob
+              ? summarizeComparisonRows(copy, zoneComparisonRows)
+              : "No successful dns.sync payload recorded yet for this zone."
+          ),
+          tone:
+            selectedZoneDrift?.dispatchRecommended || zoneComparisonRows.some((row) => row.state === "changed")
+              ? ("danger" as const)
+              : ("default" as const)
+        },
+        {
+          title: "zone.delete",
+          meta: escapeHtml(`${selectedZoneApps.length} app(s)`),
+          summary: escapeHtml(
+            `${selectedZoneBackupPolicies.length} backup polic(ies) and ${selectedZonePlanItems.length} queued work item(s) currently relate to this zone.`
+          ),
+          tone:
+            selectedZoneApps.length + selectedZoneBackupPolicies.length > 0
+              ? ("danger" as const)
+              : ("default" as const)
+        }
+      ]
+    : [];
+  const selectedAppActionPreviewItems = selectedApp
+    ? [
+        {
+          title: "proxy.render",
+          meta: escapeHtml(
+            selectedApp.standbyNodeId
+              ? `${selectedApp.primaryNodeId} -> ${selectedApp.standbyNodeId}`
+              : selectedApp.primaryNodeId
+          ),
+          summary: escapeHtml(
+            selectedAppLatestAppliedProxyJob
+              ? summarizeComparisonRows(copy, appComparisonRows)
+              : "No successful proxy.render payload recorded yet for this app."
+          ),
+          tone:
+            selectedAppProxyDrifts.some((entry) => entry.dispatchRecommended) ||
+            appComparisonRows.some((row) => row.state === "changed")
+              ? ("danger" as const)
+              : ("default" as const)
+        },
+        {
+          title: "app.reconcile",
+          meta: escapeHtml(
+            `${selectedAppDatabases.length} database(s) · ${selectedApp.aliases.length} alias(es)`
+          ),
+          summary: escapeHtml(
+            `${selectedAppPlanItems.length} queued work item(s) and ${selectedAppBackupPolicies.length} backup polic(ies) are currently linked to this app.`
+          ),
+          tone:
+            selectedAppDatabases.length + selectedAppBackupPolicies.length > 0
+              ? ("default" as const)
+              : ("default" as const)
+        },
+        {
+          title: "app.delete",
+          meta: escapeHtml(selectedApp.canonicalDomain),
+          summary: escapeHtml(
+            `${selectedAppDatabases.length} database definition(s) would need follow-up review and ${selectedApp.aliases.length} alias(es) would disappear from proxy planning.`
+          ),
+          tone:
+            selectedAppDatabases.length + selectedApp.aliases.length > 0
+              ? ("danger" as const)
+              : ("default" as const)
+        }
+      ]
+    : [];
+  const selectedDatabaseActionPreviewItems = selectedDatabase
+    ? [
+        {
+          title: `${selectedDatabase.engine}.reconcile`,
+          meta: escapeHtml(selectedDatabase.primaryNodeId),
+          summary: escapeHtml(
+            selectedDatabaseLatestAppliedReconcileJob
+              ? summarizeComparisonRows(copy, databaseComparisonRows)
+              : "No successful database reconcile payload recorded yet for this resource."
+          ),
+          tone:
+            selectedDatabaseDrift?.dispatchRecommended ||
+            databaseComparisonRows.some((row) => row.state === "changed")
+              ? ("danger" as const)
+              : ("default" as const)
+        },
+        {
+          title: "database.delete",
+          meta: escapeHtml(selectedDatabase.databaseName),
+          summary: escapeHtml(
+            `${selectedDatabaseBackupPolicies.length} backup polic(ies) and ${selectedDatabasePlanItems.length} queued work item(s) currently reference this database resource.`
+          ),
+          tone:
+            selectedDatabaseBackupPolicies.length + selectedDatabasePlanItems.length > 0
+              ? ("danger" as const)
+              : ("default" as const)
+        }
+      ]
+    : [];
+  const selectedBackupActionPreviewItems = selectedBackupPolicy
+    ? [
+        {
+          title: "policy.update",
+          meta: escapeHtml(`${selectedBackupPolicy.targetNodeId} · ${selectedBackupPolicy.schedule}`),
+          summary: escapeHtml(
+            `${selectedBackupTenantApps.length} app(s), ${selectedBackupTenantZones.length} zone(s) and ${selectedBackupTenantDatabases.length} database(s) fall under this policy scope.`
+          ),
+          tone: "default" as const
+        },
+        {
+          title: "policy.delete",
+          meta: escapeHtml(`${selectedBackupRuns.length} recorded run(s)`),
+          summary: escapeHtml(
+            `${selectedBackupTenantApps.length} app(s), ${selectedBackupTenantZones.length} zone(s) and ${selectedBackupTenantDatabases.length} database(s) would lose tracked coverage from this policy.`
+          ),
+          tone:
+            selectedBackupTenantApps.length +
+              selectedBackupTenantZones.length +
+              selectedBackupTenantDatabases.length >
+            0
+              ? ("danger" as const)
+              : ("default" as const)
+        }
+      ]
+    : [];
   const desiredStateLatestImportSummary = data.inventory.latestImport
     ? `${formatDate(data.inventory.latestImport.importedAt, locale)} · ${data.inventory.latestImport.sourcePath}`
     : copy.never;
@@ -2693,6 +2942,37 @@ function renderDesiredStateSection(
               : renderPill(copy.none, "muted")
           }
         ])}
+        ${renderRelatedPanel(
+          copy.effectiveStateTitle,
+          copy.effectiveStateDescription,
+          [
+            {
+              title: escapeHtml(copy.relatedJobsTitle),
+              meta: escapeHtml(`${selectedTenantJobs.length} job(s)`),
+              summary: escapeHtml(
+                selectedTenantJobs[0]?.summary ?? selectedTenantJobs[0]?.dispatchReason ?? copy.none
+              ),
+              tone: selectedTenantJobs.some((job) => job.status === "failed")
+                ? ("danger" as const)
+                : selectedTenantJobs.some((job) => job.status === "applied")
+                  ? ("success" as const)
+                  : ("default" as const)
+            },
+            {
+              title: escapeHtml(copy.auditTrailTitle),
+              meta: escapeHtml(`${selectedTenantAuditEvents.length} event(s)`),
+              summary: escapeHtml(selectedTenantAuditEvents[0]?.eventType ?? copy.none),
+              tone: "default" as const
+            }
+          ],
+          copy.noRelatedRecords
+        )}
+        ${renderRelatedPanel(
+          copy.plannedChangesTitle,
+          copy.plannedChangesDescription,
+          selectedTenantActionPreviewItems,
+          copy.noRelatedRecords
+        )}
         ${renderRelatedPanel(
           copy.relatedResourcesTitle,
           copy.relatedResourcesDescription,
@@ -2785,10 +3065,16 @@ function renderDesiredStateSection(
               value: escapeHtml(String(selectedTenantAuditEvents.length))
             }
           ])}
-            <div class="toolbar">
-              <a class="button-link secondary" href="${escapeHtml(
-                buildDashboardViewUrl("desired-state", "desired-state-apps")
-              )}">${escapeHtml(copy.navApps)}</a>
+          ${renderRelatedPanel(
+            copy.plannedChangesTitle,
+            copy.plannedChangesDescription,
+            selectedTenantActionPreviewItems,
+            copy.noRelatedRecords
+          )}
+          <div class="toolbar">
+            <a class="button-link secondary" href="${escapeHtml(
+              buildDashboardViewUrl("desired-state", "desired-state-apps")
+            )}">${escapeHtml(copy.navApps)}</a>
               <a class="button-link secondary" href="${escapeHtml(
                 buildDashboardViewUrl("desired-state", "desired-state-zones")
               )}">${escapeHtml(copy.navZones)}</a>
@@ -2852,6 +3138,41 @@ function renderDesiredStateSection(
               : renderPill(copy.none, "muted")
           }
         ])}
+        ${renderRelatedPanel(
+          copy.effectiveStateTitle,
+          copy.effectiveStateDescription,
+          [
+            {
+              title: escapeHtml(copy.nodeHealthTitle),
+              meta: escapeHtml(selectedNodeHealthSnapshot?.currentVersion ?? copy.none),
+              summary: escapeHtml(
+                selectedNodeHealthSnapshot?.latestJobSummary ?? formatDate(selectedNodeHealthSnapshot?.lastSeenAt, locale)
+              ),
+              tone: selectedNodeHealthSnapshot?.latestJobStatus === "failed"
+                ? ("danger" as const)
+                : selectedNodeHealthSnapshot?.latestJobStatus === "applied"
+                  ? ("success" as const)
+                  : ("default" as const)
+            },
+            {
+              title: escapeHtml(copy.relatedDriftTitle),
+              meta: escapeHtml(`${selectedNodeDesiredDrift.length} drift item(s)`),
+              summary: escapeHtml(
+                selectedNodeDesiredDrift[0]?.latestSummary ?? copy.none
+              ),
+              tone: selectedNodeDesiredDrift.some((entry) => entry.driftStatus !== "in_sync")
+                ? ("danger" as const)
+                : ("default" as const)
+            }
+          ],
+          copy.noRelatedRecords
+        )}
+        ${renderRelatedPanel(
+          copy.plannedChangesTitle,
+          copy.plannedChangesDescription,
+          selectedNodeActionPreviewItems,
+          copy.noRelatedRecords
+        )}
         ${renderRelatedPanel(
           copy.relatedResourcesTitle,
           copy.relatedResourcesDescription,
@@ -2962,6 +3283,12 @@ function renderDesiredStateSection(
               },
               { label: copy.nodeHealthTitle, value: `<a class="detail-link" href="${escapeHtml(buildDashboardViewUrl("node-health", undefined, selectedNode.nodeId))}">${escapeHtml(copy.openNodeHealth)}</a>` }
             ])}
+            ${renderRelatedPanel(
+              copy.plannedChangesTitle,
+              copy.plannedChangesDescription,
+              selectedNodeActionPreviewItems,
+              copy.noRelatedRecords
+            )}
           </article>
         </div>
         <article class="panel panel-nested detail-shell danger-shell">
@@ -3049,6 +3376,41 @@ function renderDesiredStateSection(
               ])
             : `<p class="empty">${escapeHtml(copy.noBackups)}</p>`
         }
+        ${renderRelatedPanel(
+          copy.effectiveStateTitle,
+          copy.effectiveStateDescription,
+          [
+            {
+              title: escapeHtml(copy.nodeHealthTitle),
+              meta: escapeHtml(selectedBackupTargetHealth?.currentVersion ?? copy.none),
+              summary: escapeHtml(
+                selectedBackupTargetHealth?.latestJobSummary ?? copy.none
+              ),
+              tone: selectedBackupTargetHealth?.latestJobStatus === "failed"
+                ? ("danger" as const)
+                : selectedBackupTargetHealth?.latestJobStatus === "applied"
+                  ? ("success" as const)
+                  : ("default" as const)
+            },
+            {
+              title: escapeHtml(copy.relatedJobsTitle),
+              meta: escapeHtml(`${selectedBackupRuns.length} run(s)`),
+              summary: escapeHtml(selectedBackupRun?.summary ?? copy.none),
+              tone: selectedBackupRuns.some((run) => run.status === "failed")
+                ? ("danger" as const)
+                : selectedBackupRuns.some((run) => run.status === "succeeded")
+                  ? ("success" as const)
+                  : ("default" as const)
+            }
+          ],
+          copy.noRelatedRecords
+        )}
+        ${renderRelatedPanel(
+          copy.plannedChangesTitle,
+          copy.plannedChangesDescription,
+          selectedBackupActionPreviewItems,
+          copy.noRelatedRecords
+        )}
         ${renderRelatedPanel(
           copy.relatedResourcesTitle,
           copy.relatedResourcesDescription,
@@ -3199,6 +3561,12 @@ function renderDesiredStateSection(
                 ],
                 copy.noRelatedRecords
               )}
+              ${renderRelatedPanel(
+                copy.plannedChangesTitle,
+                copy.plannedChangesDescription,
+                selectedBackupActionPreviewItems,
+                copy.noRelatedRecords
+              )}
             </article>
           </div>
           <div class="toolbar">
@@ -3337,6 +3705,12 @@ function renderDesiredStateSection(
           copy.desiredAppliedTitle,
           copy.desiredAppliedDescription,
           zoneComparisonRows
+        )}
+        ${renderRelatedPanel(
+          copy.plannedChangesTitle,
+          copy.plannedChangesDescription,
+          selectedZoneActionPreviewItems,
+          copy.noRelatedRecords
         )}
         ${renderRelatedPanel(
           copy.queuedWorkTitle,
@@ -3498,6 +3872,12 @@ function renderDesiredStateSection(
                 copy.queuedWorkTitle,
                 copy.queuedWorkDescription,
                 selectedZonePlanItems,
+                copy.noRelatedRecords
+              )}
+              ${renderRelatedPanel(
+                copy.plannedChangesTitle,
+                copy.plannedChangesDescription,
+                selectedZoneActionPreviewItems,
                 copy.noRelatedRecords
               )}
               ${renderRelatedPanel(
@@ -3695,6 +4075,12 @@ function renderDesiredStateSection(
           appComparisonRows
         )}
         ${renderRelatedPanel(
+          copy.plannedChangesTitle,
+          copy.plannedChangesDescription,
+          selectedAppActionPreviewItems,
+          copy.noRelatedRecords
+        )}
+        ${renderRelatedPanel(
           copy.queuedWorkTitle,
           copy.queuedWorkDescription,
           selectedAppPlanItems,
@@ -3859,6 +4245,12 @@ function renderDesiredStateSection(
                 copy.queuedWorkTitle,
                 copy.queuedWorkDescription,
                 selectedAppPlanItems,
+                copy.noRelatedRecords
+              )}
+              ${renderRelatedPanel(
+                copy.plannedChangesTitle,
+                copy.plannedChangesDescription,
+                selectedAppActionPreviewItems,
                 copy.noRelatedRecords
               )}
               ${renderRelatedPanel(
@@ -4040,6 +4432,12 @@ function renderDesiredStateSection(
           databaseComparisonRows
         )}
         ${renderRelatedPanel(
+          copy.plannedChangesTitle,
+          copy.plannedChangesDescription,
+          selectedDatabaseActionPreviewItems,
+          copy.noRelatedRecords
+        )}
+        ${renderRelatedPanel(
           copy.queuedWorkTitle,
           copy.queuedWorkDescription,
           selectedDatabasePlanItems,
@@ -4191,6 +4589,12 @@ function renderDesiredStateSection(
                 copy.queuedWorkTitle,
                 copy.queuedWorkDescription,
                 selectedDatabasePlanItems,
+                copy.noRelatedRecords
+              )}
+              ${renderRelatedPanel(
+                copy.plannedChangesTitle,
+                copy.plannedChangesDescription,
+                selectedDatabaseActionPreviewItems,
                 copy.noRelatedRecords
               )}
               ${renderRelatedPanel(
@@ -5061,10 +5465,18 @@ function renderDashboard(
   const jobNodeGroups = groupItemsBy(data.jobHistory, (job) => job.nodeId).slice(0, 6);
   const jobKindGroups = groupItemsBy(data.jobHistory, (job) => job.kind).slice(0, 6);
   const jobStatusGroups = groupItemsBy(data.jobHistory, (job) => job.status ?? "queued").slice(0, 4);
+  const jobResourceGroups = groupItemsBy(
+    data.jobHistory.filter((job) => Boolean(job.resourceKey)),
+    (job) => job.resourceKey ?? "unscoped"
+  ).slice(0, 6);
   const auditEventGroups = groupItemsBy(data.auditEvents, (event) => event.eventType).slice(0, 6);
   const auditActorGroups = groupItemsBy(
     data.auditEvents,
     (event) => `${event.actorType}:${event.actorId ?? "unknown"}`
+  ).slice(0, 6);
+  const auditEntityGroups = groupItemsBy(
+    data.auditEvents.filter((event) => Boolean(event.entityType || event.entityId)),
+    (event) => event.entityType && event.entityId ? `${event.entityType}:${event.entityId}` : event.entityType ?? event.entityId ?? "unknown"
   ).slice(0, 6);
   const driftNodeGroups = groupItemsBy(data.drift, (entry) => entry.nodeId).slice(0, 6);
   const driftKindGroups = groupItemsBy(data.drift, (entry) => entry.resourceKind).slice(0, 6);
@@ -5078,6 +5490,8 @@ function renderDashboard(
   ).size;
   const backupNodeGroups = groupItemsBy(data.backups.latestRuns, (run) => run.nodeId).slice(0, 6);
   const backupStatusGroups = groupItemsBy(data.backups.latestRuns, (run) => run.status).slice(0, 4);
+  const backupTenantGroups = groupItemsBy(data.backups.policies, (policy) => policy.tenantSlug).slice(0, 6);
+  const backupPolicyGroups = groupItemsBy(data.backups.latestRuns, (run) => run.policySlug).slice(0, 6);
   const backupPolicyPreviewItems = data.backups.policies.slice(0, 6).map((policy) => ({
     title: `<a class="detail-link" href="${escapeHtml(
       buildDashboardViewUrl("backups", undefined, policy.policySlug)
@@ -5116,8 +5530,8 @@ function renderDashboard(
           >${escapeHtml(copy.actionsRunReconciliation)}</button>
         </form>
       </article>
-      <article class="action-card action-card-accent">
-        <span class="action-eyebrow">Export</span>
+      <article class="action-card action-card-muted">
+        <span class="action-eyebrow">${escapeHtml(copy.bootstrapInventoryTitle)}</span>
         <h3>${escapeHtml(copy.actionsDownloadYaml)}</h3>
         <p class="muted">${escapeHtml(copy.actionExportDescription)}</p>
         <div class="action-card-context">
@@ -5142,6 +5556,7 @@ function renderDashboard(
             { className: "action-card-facts-wide-labels" }
           )}
         </div>
+        <p class="action-card-note">${escapeHtml(copy.dailyOperationsSourceNote)}</p>
         <a class="button-link secondary" href="/inventory/export">${escapeHtml(
           copy.actionsDownloadYaml
         )}</a>
@@ -5886,6 +6301,23 @@ function renderDashboard(
     copy.noRelatedRecords
   );
 
+  const auditEntitiesPanel = renderRelatedPanel(
+    copy.auditEntitiesTitle,
+    copy.auditEntitiesDescription,
+    auditEntityGroups.map((group) => ({
+      title: escapeHtml(group.key),
+      meta: escapeHtml(`${group.items.length} event(s)`),
+      summary: escapeHtml(
+        group.items
+          .slice(0, 2)
+          .map((event) => event.eventType)
+          .join(" · ")
+      ),
+      tone: "default" as const
+    })),
+    copy.noRelatedRecords
+  );
+
   const jobNodesPanel = renderRelatedPanel(
     copy.jobNodesTitle,
     copy.jobNodesDescription,
@@ -5909,6 +6341,46 @@ function renderDashboard(
     copy.jobKindsDescription,
     jobKindGroups.map((group) => ({
       title: escapeHtml(group.key),
+      meta: escapeHtml(`${group.items.length} job(s)`),
+      summary: escapeHtml(summarizeGroupStatuses(group.items)),
+      tone: group.items.some((job) => job.status === "failed")
+        ? ("danger" as const)
+        : group.items.some((job) => job.status === "applied")
+          ? ("success" as const)
+          : ("default" as const)
+    })),
+    copy.noJobs
+  );
+
+  const jobStatusesPanel = renderRelatedPanel(
+    copy.jobStatusesTitle,
+    copy.jobStatusesDescription,
+    jobStatusGroups.map((group) => ({
+      title: escapeHtml(group.key),
+      meta: escapeHtml(`${group.items.length} job(s)`),
+      summary: escapeHtml(
+        group.items
+          .slice(0, 2)
+          .map((job) => `${job.kind} · ${job.nodeId}`)
+          .join(" · ")
+      ),
+      tone:
+        group.key === "failed"
+          ? ("danger" as const)
+          : group.key === "applied"
+            ? ("success" as const)
+            : ("default" as const)
+    })),
+    copy.noJobs
+  );
+
+  const jobResourceHotspotsPanel = renderRelatedPanel(
+    copy.jobResourceHotspotsTitle,
+    copy.jobResourceHotspotsDescription,
+    jobResourceGroups.map((group) => ({
+      title: `<a class="detail-link mono" href="${escapeHtml(
+        buildDashboardViewUrl("resource-drift", undefined, group.key)
+      )}">${escapeHtml(group.key)}</a>`,
       meta: escapeHtml(`${group.items.length} job(s)`),
       summary: escapeHtml(summarizeGroupStatuses(group.items)),
       tone: group.items.some((job) => job.status === "failed")
@@ -6126,6 +6598,49 @@ function renderDashboard(
     copy.noBackups
   );
 
+  const backupCoverageByTenantPanel = renderRelatedPanel(
+    copy.backupCoverageByTenantTitle,
+    copy.backupCoverageByTenantDescription,
+    backupTenantGroups.map((group) => {
+      const tenantApps = data.desiredState.spec.apps.filter((app) => app.tenantSlug === group.key).length;
+      const tenantZones = data.desiredState.spec.zones.filter((zone) => zone.tenantSlug === group.key).length;
+      const tenantDatabases = data.desiredState.spec.databases.filter((database) => {
+        const app = data.desiredState.spec.apps.find((entry) => entry.slug === database.appSlug);
+        return app?.tenantSlug === group.key;
+      }).length;
+
+      return {
+        title: `<a class="detail-link" href="${escapeHtml(
+          buildDashboardViewUrl("desired-state", "desired-state-tenants", group.key)
+        )}">${escapeHtml(group.key)}</a>`,
+        meta: escapeHtml(`${group.items.length} polic(ies)`),
+        summary: escapeHtml(
+          `${tenantApps} app(s) · ${tenantZones} zone(s) · ${tenantDatabases} database(s)`
+        ),
+        tone: "default" as const
+      };
+    }),
+    copy.noBackupPolicies
+  );
+
+  const backupPolicySignalsPanel = renderRelatedPanel(
+    copy.backupPolicySignalsTitle,
+    copy.backupPolicySignalsDescription,
+    backupPolicyGroups.map((group) => ({
+      title: `<a class="detail-link mono" href="${escapeHtml(
+        buildDashboardViewUrl("backups", undefined, group.key)
+      )}">${escapeHtml(group.key)}</a>`,
+      meta: escapeHtml(`${group.items.length} run(s)`),
+      summary: escapeHtml(summarizeGroupStatuses(group.items)),
+      tone: group.items.some((run) => run.status === "failed")
+        ? ("danger" as const)
+        : group.items.some((run) => run.status === "succeeded")
+          ? ("success" as const)
+          : ("default" as const)
+    })),
+    copy.noBackups
+  );
+
   const nodeHealthSection = `<section id="section-node-health" class="panel section-panel">
     ${renderSignalStrip([
       { label: copy.healthyNodes, value: String(healthyNodeCount), tone: healthyNodeCount > 0 ? "success" : "muted" },
@@ -6245,10 +6760,13 @@ function renderDashboard(
       ${selectedJobPanel}
       <div class="stack">
         ${failureFocusPanel}
+        ${jobStatusesPanel}
         ${jobNodesPanel}
         ${jobKindsPanel}
+        ${jobResourceHotspotsPanel}
         ${auditSignalsPanel}
         ${auditActorsPanel}
+        ${auditEntitiesPanel}
         ${renderJobFeedPanel(
           copy,
           locale,
@@ -6295,7 +6813,9 @@ function renderDashboard(
       ${selectedBackupRunPanel}
       <div class="stack">
         ${backupCoveragePanel}
+        ${backupCoverageByTenantPanel}
         ${backupTargetPosturePanel}
+        ${backupPolicySignalsPanel}
         ${backupRunSignalsPanel}
         ${selectedBackupPolicyPanel}
         ${selectedBackupRunsPanel}

@@ -918,12 +918,40 @@ ${renderBaseStyleBlock()}
         margin: 0;
       }
 
-      .page-header-actions select {
-        width: 4.95rem;
-        min-width: 4.95rem;
-        min-height: 2.2rem;
-        padding-inline: 0.65rem 1.6rem;
-        text-align-last: center;
+      .locale-switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.2rem;
+        padding: 0.2rem;
+        border: 1px solid rgba(13, 32, 56, 0.12);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: 0 0.5rem 1.4rem rgba(16, 39, 68, 0.08);
+      }
+
+      .locale-switch form {
+        margin: 0;
+      }
+
+      .locale-button {
+        min-width: 2.95rem;
+        min-height: 2.15rem;
+        padding: 0.45rem 0.75rem;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--navy-strong);
+        box-shadow: none;
+      }
+
+      .locale-button:hover,
+      .locale-button:focus-visible {
+        background: rgba(16, 39, 68, 0.08);
+      }
+
+      .locale-button.active {
+        background: linear-gradient(135deg, var(--navy-soft), var(--navy-strong));
+        color: #f5fbff;
+        box-shadow: 0 0.6rem 1.4rem rgba(16, 39, 68, 0.16);
       }
 
       .topbar-disclosure {

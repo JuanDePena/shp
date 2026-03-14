@@ -2391,19 +2391,26 @@ function renderDashboard(
     </div>
   </div>`;
 
-  const topbarActionsHtml = `<form method="post" action="/preferences/locale" class="inline-form">
-    <input type="hidden" name="returnTo" value="${escapeHtml(currentPath)}" />
-    <label>
-      <select
-        name="locale"
-        aria-label="${escapeHtml(copy.languageLabel)}"
-        onchange="const returnTo=this.form.querySelector('[name=returnTo]'); if (returnTo instanceof HTMLInputElement) { returnTo.value = window.location.pathname + window.location.search + window.location.hash; } this.form.submit();"
-      >
-        <option value="es"${locale === "es" ? " selected" : ""}>ES</option>
-        <option value="en"${locale === "en" ? " selected" : ""}>EN</option>
-      </select>
-    </label>
-  </form>
+  const topbarActionsHtml = `<div class="locale-switch" role="group" aria-label="${escapeHtml(copy.languageLabel)}">
+    <form method="post" action="/preferences/locale" class="inline-form">
+      <input type="hidden" name="returnTo" value="${escapeHtml(currentPath)}" />
+      <input type="hidden" name="locale" value="es" />
+      <button
+        type="submit"
+        class="locale-button${locale === "es" ? " active" : ""}"
+        aria-pressed="${locale === "es" ? "true" : "false"}"
+      >ES</button>
+    </form>
+    <form method="post" action="/preferences/locale" class="inline-form">
+      <input type="hidden" name="returnTo" value="${escapeHtml(currentPath)}" />
+      <input type="hidden" name="locale" value="en" />
+      <button
+        type="submit"
+        class="locale-button${locale === "en" ? " active" : ""}"
+        aria-pressed="${locale === "en" ? "true" : "false"}"
+      >EN</button>
+    </form>
+  </div>
   <div class="topbar-disclosure" data-topbar-disclosure>
     <button
       type="button"

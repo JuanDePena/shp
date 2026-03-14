@@ -1,6 +1,6 @@
 {
   "name": "simplehost-panel",
-  "version": "2603.14.10",
+  "version": "2603.14.11",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.32.1",

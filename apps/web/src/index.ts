@@ -205,6 +205,7 @@ interface WebCopy {
   applyFiltersLabel: string;
   filterWorkspaceTitle: string;
   filterWorkspaceDescription: string;
+  filterActorLabel: string;
   filterStatusLabel: string;
   filterKindLabel: string;
   filterNodeLabel: string;
@@ -499,6 +500,7 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     filterWorkspaceTitle: "Refine workspace",
     filterWorkspaceDescription:
       "Use structured filters to narrow the current operational slice before opening a specific record.",
+    filterActorLabel: "Actor",
     filterStatusLabel: "Status",
     filterKindLabel: "Kind",
     filterNodeLabel: "Node",
@@ -795,6 +797,7 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     filterWorkspaceTitle: "Refinar workspace",
     filterWorkspaceDescription:
       "Usa filtros estructurados para acotar el corte operativo actual antes de abrir un registro específico.",
+    filterActorLabel: "Actor",
     filterStatusLabel: "Estado",
     filterKindLabel: "Tipo",
     filterNodeLabel: "Nodo",
@@ -2928,6 +2931,9 @@ function renderDesiredStateSection(
           )
         ]
       : [];
+  const zoneDeltaPreviewItems = createComparisonDeltaItems(copy, zoneComparisonRows, 4);
+  const appDeltaPreviewItems = createComparisonDeltaItems(copy, appComparisonRows, 4);
+  const databaseDeltaPreviewItems = createComparisonDeltaItems(copy, databaseComparisonRows, 4);
   const selectedTenantActionPreviewItems = selectedTenant
     ? [
         {
@@ -3005,7 +3011,8 @@ function renderDesiredStateSection(
             selectedZoneApps.length + selectedZoneBackupPolicies.length > 0
               ? ("danger" as const)
               : ("default" as const)
-        }
+        },
+        ...zoneDeltaPreviewItems
       ]
     : [];
   const selectedAppActionPreviewItems = selectedApp
@@ -3051,7 +3058,8 @@ function renderDesiredStateSection(
             selectedAppDatabases.length + selectedApp.aliases.length > 0
               ? ("danger" as const)
               : ("default" as const)
-        }
+        },
+        ...appDeltaPreviewItems
       ]
     : [];
   const selectedDatabaseActionPreviewItems = selectedDatabase
@@ -3080,7 +3088,8 @@ function renderDesiredStateSection(
             selectedDatabaseBackupPolicies.length + selectedDatabasePlanItems.length > 0
               ? ("danger" as const)
               : ("default" as const)
-        }
+        },
+        ...databaseDeltaPreviewItems
       ]
     : [];
   const selectedBackupActionPreviewItems = selectedBackupPolicy
@@ -3106,6 +3115,40 @@ function renderDesiredStateSection(
             0
               ? ("danger" as const)
               : ("default" as const)
+        },
+        {
+          title: "coverage.apps",
+          meta: escapeHtml(`${selectedBackupTenantApps.length} app(s)`),
+          summary: escapeHtml(
+            selectedBackupTenantApps
+              .slice(0, 3)
+              .map((app) => `${app.slug} · ${app.primaryNodeId}`)
+              .join(" · ") || copy.none
+          ),
+          tone: selectedBackupTenantApps.length > 0 ? ("success" as const) : ("default" as const)
+        },
+        {
+          title: "coverage.databases",
+          meta: escapeHtml(`${selectedBackupTenantDatabases.length} database(s)`),
+          summary: escapeHtml(
+            selectedBackupTenantDatabases
+              .slice(0, 3)
+              .map((database) => `${database.databaseName} · ${database.engine}`)
+              .join(" · ") || copy.none
+          ),
+          tone:
+            selectedBackupTenantDatabases.length > 0 ? ("success" as const) : ("default" as const)
+        },
+        {
+          title: "coverage.zones",
+          meta: escapeHtml(`${selectedBackupTenantZones.length} zone(s)`),
+          summary: escapeHtml(
+            selectedBackupTenantZones
+              .slice(0, 3)
+              .map((zone) => `${zone.zoneName} · ${zone.primaryNodeId}`)
+              .join(" · ") || copy.none
+          ),
+          tone: selectedBackupTenantZones.length > 0 ? ("success" as const) : ("default" as const)
         }
       ]
     : [];
@@ -3173,6 +3216,22 @@ function renderDesiredStateSection(
           copy.plannedChangesTitle,
           copy.plannedChangesDescription,
           selectedTenantActionPreviewItems,
+          copy.noRelatedRecords
+        )}
+        ${renderRelatedPanel(
+          copy.failureFocusTitle,
+          copy.failureFocusDescription,
+          selectedTenantJobs
+            .filter((job) => job.status === "failed")
+            .slice(0, 4)
+            .map((job) => ({
+              title: `<a class="detail-link" href="${escapeHtml(
+                buildDashboardViewUrl("job-history", undefined, job.jobId)
+              )}">${escapeHtml(job.kind)}</a>`,
+              meta: escapeHtml([job.jobId, formatDate(job.createdAt, locale)].join(" · ")),
+              summary: escapeHtml(job.summary ?? job.dispatchReason ?? copy.none),
+              tone: "danger" as const
+            })),
           copy.noRelatedRecords
         )}
         ${renderRelatedPanel(
@@ -3373,6 +3432,22 @@ function renderDesiredStateSection(
           copy.plannedChangesTitle,
           copy.plannedChangesDescription,
           selectedNodeActionPreviewItems,
+          copy.noRelatedRecords
+        )}
+        ${renderRelatedPanel(
+          copy.failureFocusTitle,
+          copy.failureFocusDescription,
+          selectedNodeDesiredJobs
+            .filter((job) => job.status === "failed")
+            .slice(0, 4)
+            .map((job) => ({
+              title: `<a class="detail-link" href="${escapeHtml(
+                buildDashboardViewUrl("job-history", undefined, job.jobId)
+              )}">${escapeHtml(job.kind)}</a>`,
+              meta: escapeHtml([job.jobId, formatDate(job.createdAt, locale)].join(" · ")),
+              summary: escapeHtml(job.summary ?? job.dispatchReason ?? copy.none),
+              tone: "danger" as const
+            })),
           copy.noRelatedRecords
         )}
         ${renderRelatedPanel(
@@ -3612,6 +3687,22 @@ function renderDesiredStateSection(
           copy.plannedChangesDescription,
           selectedBackupActionPreviewItems,
           copy.noRelatedRecords
+        )}
+        ${renderRelatedPanel(
+          copy.failureFocusTitle,
+          copy.failureFocusDescription,
+          selectedBackupRuns
+            .filter((run) => run.status === "failed")
+            .slice(0, 4)
+            .map((run) => ({
+              title: `<a class="detail-link" href="${escapeHtml(
+                buildDashboardViewUrl("backups", undefined, run.runId)
+              )}">${escapeHtml(run.runId)}</a>`,
+              meta: escapeHtml([run.policySlug, formatDate(run.startedAt, locale)].join(" · ")),
+              summary: escapeHtml(run.summary),
+              tone: "danger" as const
+            })),
+          copy.noBackups
         )}
         ${renderRelatedPanel(
           copy.relatedResourcesTitle,
@@ -4126,6 +4217,12 @@ function renderDesiredStateSection(
                     : renderPill(copy.none, "muted")
                 }
               ])}
+              ${renderComparisonTable(
+                copy,
+                copy.desiredAppliedTitle,
+                copy.desiredAppliedDescription,
+                zoneComparisonRows
+              )}
               ${renderRelatedPanel(
                 copy.queuedWorkTitle,
                 copy.queuedWorkDescription,
@@ -4562,6 +4659,12 @@ function renderDesiredStateSection(
                       : renderPill(copy.none, "muted")
                 }
               ])}
+              ${renderComparisonTable(
+                copy,
+                copy.desiredAppliedTitle,
+                copy.desiredAppliedDescription,
+                appComparisonRows
+              )}
               ${renderRelatedPanel(
                 copy.queuedWorkTitle,
                 copy.queuedWorkDescription,
@@ -4968,6 +5071,12 @@ function renderDesiredStateSection(
                     : renderPill(copy.none, "muted")
                 }
               ])}
+              ${renderComparisonTable(
+                copy,
+                copy.desiredAppliedTitle,
+                copy.desiredAppliedDescription,
+                databaseComparisonRows
+              )}
               ${renderRelatedPanel(
                 copy.queuedWorkTitle,
                 copy.queuedWorkDescription,
@@ -5552,6 +5661,7 @@ function renderDashboard(
   const jobNodeFilter = normalizeFilterValue(currentUrl.searchParams.get("jobNode"));
   const jobResourceFilter = normalizeFilterValue(currentUrl.searchParams.get("jobResource"));
   const auditTypeFilter = normalizeFilterValue(currentUrl.searchParams.get("auditType"));
+  const auditActorFilter = normalizeFilterValue(currentUrl.searchParams.get("auditActor"));
   const auditEntityFilter = normalizeFilterValue(currentUrl.searchParams.get("auditEntity"));
   const driftStatusFilter = normalizeFilterValue(currentUrl.searchParams.get("driftStatus"));
   const driftKindFilter = normalizeFilterValue(currentUrl.searchParams.get("driftKind"));
@@ -5585,6 +5695,20 @@ function renderDashboard(
   const filteredAuditEvents = data.auditEvents.filter((event) => {
     if (auditTypeFilter && event.eventType !== auditTypeFilter) {
       return false;
+    }
+
+    if (auditActorFilter) {
+      const actorKey = `${event.actorType}:${event.actorId ?? "unknown"}`.toLowerCase();
+      const actorType = event.actorType.toLowerCase();
+      const actorId = (event.actorId ?? "").toLowerCase();
+
+      if (
+        !actorKey.includes(auditActorFilter) &&
+        !actorType.includes(auditActorFilter) &&
+        !actorId.includes(auditActorFilter)
+      ) {
+        return false;
+      }
     }
 
     if (
@@ -5661,6 +5785,7 @@ function renderDashboard(
     jobNode: jobNodeFilter,
     jobResource: jobResourceFilter,
     auditType: auditTypeFilter,
+    auditActor: auditActorFilter,
     auditEntity: auditEntityFilter
   };
   const currentDriftFilters = {
@@ -6076,6 +6201,7 @@ function renderDashboard(
     jobNodeFilter ? { label: copy.filterNodeLabel, value: jobNodeFilter } : undefined,
     jobResourceFilter ? { label: copy.filterResourceLabel, value: jobResourceFilter } : undefined,
     auditTypeFilter ? { label: copy.filterEventLabel, value: auditTypeFilter } : undefined,
+    auditActorFilter ? { label: copy.filterActorLabel, value: auditActorFilter } : undefined,
     auditEntityFilter ? { label: copy.filterEntityLabel, value: auditEntityFilter } : undefined
   ].filter(Boolean) as Array<{ label: string; value: string }>;
   const activeDriftFilterItems = [
@@ -6126,6 +6252,13 @@ function renderDashboard(
         label: copy.filterEventLabel,
         value: auditTypeFilter,
         options: createUniqueSelectOptions(data.auditEvents.map((event) => event.eventType))
+      },
+      {
+        name: "auditActor",
+        label: copy.filterActorLabel,
+        type: "search",
+        value: auditActorFilter,
+        placeholder: copy.filterActorLabel
       },
       {
         name: "auditEntity",
@@ -6219,7 +6352,7 @@ function renderDashboard(
       </article>
       <article class="action-card action-card-muted">
         <span class="action-eyebrow">${escapeHtml(copy.bootstrapInventoryTitle)}</span>
-        <h3>${escapeHtml(copy.actionsDownloadYaml)}</h3>
+        <h3>${escapeHtml(copy.bootstrapInventoryTitle)}</h3>
         <p class="muted">${escapeHtml(copy.bootstrapInventoryDescription)}</p>
         <div class="action-card-context">
           <span class="action-card-context-title">${escapeHtml(copy.latestImport)}</span>
@@ -6249,14 +6382,9 @@ function renderDashboard(
           )}
         </div>
         <p class="action-card-note">${escapeHtml(copy.dailyOperationsSourceNote)}</p>
-        <div class="toolbar">
-          <a class="button-link secondary" href="/inventory/export">${escapeHtml(
-            copy.actionsDownloadYaml
-          )}</a>
-          <a class="button-link secondary" href="${escapeHtml(
-            buildDashboardViewUrl("desired-state", "desired-state-create")
-          )}">${escapeHtml(copy.openDesiredState)}</a>
-        </div>
+        <a class="button-link secondary" href="/inventory/export">${escapeHtml(
+          copy.actionsDownloadYaml
+        )}</a>
       </article>
     </div>`;
 
@@ -7207,7 +7335,7 @@ function renderDashboard(
       title: `<a class="detail-link" href="${escapeHtml(
         buildDashboardViewUrl("job-history", undefined, undefined, {
           ...currentJobFilters,
-          auditEntity: group.key
+          auditActor: group.key
         })
       )}">${escapeHtml(group.key)}</a>`,
       meta: escapeHtml(`${group.items.length} event(s)`),

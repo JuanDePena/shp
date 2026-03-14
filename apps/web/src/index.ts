@@ -11,6 +11,7 @@ import {
   type AuthLoginResponse,
   type AuthenticatedUserSummary,
   type BackupsOverview,
+  type BackupRunSummary,
   type DatabaseReconcileRequest,
   type DesiredStateAppInput,
   type DesiredStateApplyRequest,
@@ -152,8 +153,31 @@ interface WebCopy {
   failureFocusDescription: string;
   auditSignalsTitle: string;
   auditSignalsDescription: string;
+  auditActorsTitle: string;
+  auditActorsDescription: string;
+  desiredAppliedTitle: string;
+  desiredAppliedDescription: string;
+  comparisonFieldLabel: string;
+  comparisonDesiredLabel: string;
+  comparisonAppliedLabel: string;
+  comparisonStatusLabel: string;
+  comparisonMatchLabel: string;
+  comparisonChangedLabel: string;
+  comparisonUnknownLabel: string;
   backupCoverageTitle: string;
   backupCoverageDescription: string;
+  backupTargetPostureTitle: string;
+  backupTargetPostureDescription: string;
+  backupRunSignalsTitle: string;
+  backupRunSignalsDescription: string;
+  jobNodesTitle: string;
+  jobNodesDescription: string;
+  jobKindsTitle: string;
+  jobKindsDescription: string;
+  driftNodesTitle: string;
+  driftNodesDescription: string;
+  driftKindsTitle: string;
+  driftKindsDescription: string;
   relatedJobsTitle: string;
   relatedDriftTitle: string;
   relatedResourcesTitle: string;
@@ -185,6 +209,7 @@ interface WebCopy {
   runningBackups: string;
   policyCoverage: string;
   transitionalBootstrapNote: string;
+  dailyOperationsSourceNote: string;
   openJobHistory: string;
   openDriftView: string;
   openBackupsView: string;
@@ -380,8 +405,33 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     failureFocusDescription: "Most recent failed operations in the current workspace.",
     auditSignalsTitle: "Audit signals",
     auditSignalsDescription: "Most active event types in the current slice.",
+    auditActorsTitle: "Audit actors",
+    auditActorsDescription: "Recent actors and touched entities in the current slice.",
+    desiredAppliedTitle: "Desired vs last applied",
+    desiredAppliedDescription:
+      "Compare the current desired definition with the latest successful job payload.",
+    comparisonFieldLabel: "Field",
+    comparisonDesiredLabel: "Desired",
+    comparisonAppliedLabel: "Last applied",
+    comparisonStatusLabel: "Status",
+    comparisonMatchLabel: "match",
+    comparisonChangedLabel: "changed",
+    comparisonUnknownLabel: "unknown",
     backupCoverageTitle: "Coverage summary",
     backupCoverageDescription: "Policy reach, last known outcomes and tenant scope for backups.",
+    backupTargetPostureTitle: "Backup target posture",
+    backupTargetPostureDescription:
+      "Current target-node health, selected policy spread and latest known outcomes.",
+    backupRunSignalsTitle: "Backup run signals",
+    backupRunSignalsDescription: "Recent backup mix by node and outcome.",
+    jobNodesTitle: "Job activity by node",
+    jobNodesDescription: "Recent dispatch concentration and latest status by node.",
+    jobKindsTitle: "Job kind mix",
+    jobKindsDescription: "Recent workload mix and most active job kinds.",
+    driftNodesTitle: "Drift by node",
+    driftNodesDescription: "Nodes accumulating the most unresolved drift.",
+    driftKindsTitle: "Drift by kind",
+    driftKindsDescription: "Which resource families are currently drifting the most.",
     relatedJobsTitle: "Related jobs",
     relatedDriftTitle: "Related drift",
     relatedResourcesTitle: "Related resources",
@@ -413,6 +463,8 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     runningBackups: "Running backups",
     policyCoverage: "Policy coverage",
     transitionalBootstrapNote: "Transitional only. Keep operational edits in PostgreSQL desired state.",
+    dailyOperationsSourceNote:
+      "Use these product forms for day-to-day changes. YAML remains a bootstrap and disaster-recovery path only.",
     openJobHistory: "Open job history",
     openDriftView: "Open drift view",
     openBackupsView: "Open backups view",
@@ -609,8 +661,33 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     failureFocusDescription: "Operaciones fallidas más recientes dentro del workspace actual.",
     auditSignalsTitle: "Señales de auditoría",
     auditSignalsDescription: "Tipos de evento más activos dentro del corte actual.",
+    auditActorsTitle: "Actores de auditoría",
+    auditActorsDescription: "Actores recientes y entidades tocadas dentro del corte actual.",
+    desiredAppliedTitle: "Deseado vs último aplicado",
+    desiredAppliedDescription:
+      "Compara la definición deseada actual con el payload del último job exitoso.",
+    comparisonFieldLabel: "Campo",
+    comparisonDesiredLabel: "Deseado",
+    comparisonAppliedLabel: "Último aplicado",
+    comparisonStatusLabel: "Estado",
+    comparisonMatchLabel: "coincide",
+    comparisonChangedLabel: "cambió",
+    comparisonUnknownLabel: "sin dato",
     backupCoverageTitle: "Resumen de cobertura",
     backupCoverageDescription: "Alcance de políticas, últimos resultados conocidos y alcance por tenant para backups.",
+    backupTargetPostureTitle: "Postura del destino de backup",
+    backupTargetPostureDescription:
+      "Salud actual del nodo destino, alcance de la política seleccionada y últimos resultados conocidos.",
+    backupRunSignalsTitle: "Señales de ejecuciones de backup",
+    backupRunSignalsDescription: "Mezcla reciente de backups por nodo y resultado.",
+    jobNodesTitle: "Actividad de jobs por nodo",
+    jobNodesDescription: "Concentración reciente de despachos y último estado por nodo.",
+    jobKindsTitle: "Mezcla de tipos de job",
+    jobKindsDescription: "Carga reciente y tipos de job más activos.",
+    driftNodesTitle: "Drift por nodo",
+    driftNodesDescription: "Nodos que acumulan más drift sin resolver.",
+    driftKindsTitle: "Drift por tipo",
+    driftKindsDescription: "Familias de recursos con mayor drift actual.",
     relatedJobsTitle: "Jobs relacionados",
     relatedDriftTitle: "Drift relacionado",
     relatedResourcesTitle: "Recursos relacionados",
@@ -642,6 +719,8 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     runningBackups: "Backups ejecutándose",
     policyCoverage: "Cobertura de políticas",
     transitionalBootstrapNote: "Solo transicional. Mantén las ediciones operativas en PostgreSQL como estado deseado.",
+    dailyOperationsSourceNote:
+      "Usa estos formularios del producto para los cambios del día a día. El YAML queda solo para bootstrap y disaster recovery.",
     openJobHistory: "Abrir historial de jobs",
     openDriftView: "Abrir vista de drift",
     openBackupsView: "Abrir vista de backups",
@@ -1632,6 +1711,167 @@ function renderActionFacts(
     </dl>`;
 }
 
+type ComparisonState = "match" | "changed" | "unknown";
+
+interface ComparisonRow {
+  field: string;
+  desiredValue: string;
+  appliedValue: string;
+  state: ComparisonState;
+}
+
+function renderComparisonStatePill(copy: WebCopy, state: ComparisonState): string {
+  switch (state) {
+    case "match":
+      return renderPill(copy.comparisonMatchLabel, "success");
+    case "changed":
+      return renderPill(copy.comparisonChangedLabel, "danger");
+    case "unknown":
+    default:
+      return renderPill(copy.comparisonUnknownLabel, "muted");
+  }
+}
+
+function createComparisonRow(
+  label: string,
+  desiredValue: string,
+  appliedValue?: string | null
+): ComparisonRow {
+  const normalizedDesired = desiredValue.trim();
+  const normalizedApplied = appliedValue?.trim() ?? "";
+
+  return {
+    field: label,
+    desiredValue: normalizedDesired,
+    appliedValue: normalizedApplied || "",
+    state: normalizedApplied
+      ? normalizedDesired === normalizedApplied
+        ? "match"
+        : "changed"
+      : "unknown"
+  };
+}
+
+function renderComparisonTable(
+  copy: WebCopy,
+  title: string,
+  description: string,
+  rows: ComparisonRow[]
+): string {
+  return `<article class="panel panel-nested detail-shell">
+    <div class="section-head">
+      <div>
+        <h3>${escapeHtml(title)}</h3>
+        <p class="muted section-description">${escapeHtml(description)}</p>
+      </div>
+    </div>
+    ${
+      rows.length === 0
+        ? `<p class="empty">${escapeHtml(copy.noRelatedRecords)}</p>`
+        : `<div class="table-wrap comparison-table-wrap">
+            <table class="comparison-table">
+              <thead>
+                <tr>
+                  <th>${escapeHtml(copy.comparisonFieldLabel)}</th>
+                  <th>${escapeHtml(copy.comparisonDesiredLabel)}</th>
+                  <th>${escapeHtml(copy.comparisonAppliedLabel)}</th>
+                  <th>${escapeHtml(copy.comparisonStatusLabel)}</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows
+                  .map(
+                    (row) => `<tr>
+                      <td>${escapeHtml(row.field)}</td>
+                      <td>${escapeHtml(row.desiredValue || copy.none)}</td>
+                      <td>${escapeHtml(row.appliedValue || copy.none)}</td>
+                      <td class="comparison-state-cell">${renderComparisonStatePill(
+                        copy,
+                        row.state
+                      )}</td>
+                    </tr>`
+                  )
+                  .join("")}
+              </tbody>
+            </table>
+          </div>`
+    }
+  </article>`;
+}
+
+function readStringPayloadValue(payload: Record<string, unknown> | undefined, key: string): string | null {
+  const value = payload?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readBooleanPayloadValue(
+  payload: Record<string, unknown> | undefined,
+  key: string
+): boolean | null {
+  const value = payload?.[key];
+  return typeof value === "boolean" ? value : null;
+}
+
+function readStringArrayPayloadValue(
+  payload: Record<string, unknown> | undefined,
+  key: string
+): string[] {
+  const value = payload?.[key];
+
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
+}
+
+function readObjectArrayPayloadValue(
+  payload: Record<string, unknown> | undefined,
+  key: string
+): Array<Record<string, unknown>> {
+  const value = payload?.[key];
+
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter(
+    (entry): entry is Record<string, unknown> =>
+      typeof entry === "object" && entry !== null && !Array.isArray(entry)
+  );
+}
+
+function formatDnsRecordPreview(record: DnsRecordPayload | Record<string, unknown> | undefined): string {
+  if (!record) {
+    return "";
+  }
+
+  const name = "name" in record && typeof record.name === "string" ? record.name : "";
+  const type = "type" in record && typeof record.type === "string" ? record.type : "";
+  const value = "value" in record && typeof record.value === "string" ? record.value : "";
+
+  return [name, type, value].filter(Boolean).join(" ");
+}
+
+function summarizeGroupStatuses(
+  jobs: Array<JobHistoryEntry | BackupRunSummary>
+): string {
+  const applied = jobs.filter((job) => ("status" in job ? job.status : undefined) === "applied").length;
+  const succeeded = jobs.filter((job) => ("status" in job ? job.status : undefined) === "succeeded").length;
+  const failed = jobs.filter((job) => ("status" in job ? job.status : undefined) === "failed").length;
+  const queued = jobs.filter((job) => !("status" in job) || job.status === undefined).length;
+  const running = jobs.filter((job) => ("status" in job ? job.status : undefined) === "running").length;
+  const parts = [
+    applied > 0 ? `${applied} applied` : "",
+    succeeded > 0 ? `${succeeded} succeeded` : "",
+    failed > 0 ? `${failed} failed` : "",
+    running > 0 ? `${running} running` : "",
+    queued > 0 ? `${queued} queued` : ""
+  ].filter(Boolean);
+
+  return parts.length > 0 ? parts.join(" · ") : "no outcomes";
+}
+
 function renderProfileFacts(
   entries: Array<{ label: string; value: string }>
 ): string {
@@ -1904,8 +2144,18 @@ function renderDesiredStateSection(
   const selectedZoneApps = selectedZone
     ? data.desiredState.spec.apps.filter((app) => app.zoneName === selectedZone.zoneName)
     : [];
+  const selectedZoneBackupPolicies = selectedZone
+    ? data.desiredState.spec.backupPolicies.filter(
+        (policy) => policy.tenantSlug === selectedZone.tenantSlug
+      )
+    : [];
   const selectedAppDatabases = selectedApp
     ? data.desiredState.spec.databases.filter((database) => database.appSlug === selectedApp.slug)
+    : [];
+  const selectedAppBackupPolicies = selectedApp
+    ? data.desiredState.spec.backupPolicies.filter(
+        (policy) => policy.tenantSlug === selectedApp.tenantSlug
+      )
     : [];
   const selectedBackupRuns = selectedBackupPolicy
     ? data.backups.latestRuns.filter((run) => run.policySlug === selectedBackupPolicy.policySlug)
@@ -1921,6 +2171,11 @@ function renderDesiredStateSection(
         const app = data.desiredState.spec.apps.find((entry) => entry.slug === database.appSlug);
         return app?.tenantSlug === selectedBackupPolicy.tenantSlug;
       })
+    : [];
+  const selectedDatabaseBackupPolicies = selectedDatabaseApp
+    ? data.desiredState.spec.backupPolicies.filter(
+        (policy) => policy.tenantSlug === selectedDatabaseApp.tenantSlug
+      )
     : [];
   const renderEditorPanel = (
     id: string,
@@ -2216,6 +2471,15 @@ function renderDesiredStateSection(
   const selectedBackupTargetHealth = selectedBackupPolicy
     ? data.nodeHealth.find((entry) => entry.nodeId === selectedBackupPolicy.targetNodeId)
     : undefined;
+  const selectedZonePrimaryNodeHealth = selectedZone
+    ? data.nodeHealth.find((entry) => entry.nodeId === selectedZone.primaryNodeId)
+    : undefined;
+  const selectedAppPrimaryNodeHealth = selectedApp
+    ? data.nodeHealth.find((entry) => entry.nodeId === selectedApp.primaryNodeId)
+    : undefined;
+  const selectedDatabasePrimaryNodeHealth = selectedDatabase
+    ? data.nodeHealth.find((entry) => entry.nodeId === selectedDatabase.primaryNodeId)
+    : undefined;
   const selectedZoneDrift = selectedZone
     ? data.drift.find((entry) => entry.resourceKey === `zone:${selectedZone.zoneName}`)
     : undefined;
@@ -2225,6 +2489,20 @@ function renderDesiredStateSection(
   const selectedDatabaseDrift = selectedDatabase
     ? data.drift.find((entry) => entry.resourceKey === `database:${selectedDatabase.appSlug}`)
     : undefined;
+  const selectedZoneLatestAppliedDnsJob = selectedZoneJobs.find(
+    (job) => job.kind === "dns.sync" && job.status === "applied"
+  );
+  const selectedAppLatestAppliedProxyJob = selectedAppJobs.find(
+    (job) =>
+      job.kind === "proxy.render" &&
+      job.status === "applied" &&
+      job.nodeId === selectedApp?.primaryNodeId
+  );
+  const selectedDatabaseLatestAppliedReconcileJob = selectedDatabaseJobs.find(
+    (job) =>
+      (job.kind === "postgres.reconcile" || job.kind === "mariadb.reconcile") &&
+      job.status === "applied"
+  );
   const selectedAppPlanItems = selectedApp
     ? [
         {
@@ -2284,6 +2562,98 @@ function renderDesiredStateSection(
         }
       ]
     : [];
+  const zoneComparisonRows =
+    selectedZone && selectedZoneLatestAppliedDnsJob
+      ? [
+          createComparisonRow(
+            copy.zoneColZone,
+            selectedZone.zoneName,
+            readStringPayloadValue(selectedZoneLatestAppliedDnsJob.payload, "zoneName")
+          ),
+          createComparisonRow(
+            copy.targetedNodesLabel,
+            selectedZone.primaryNodeId,
+            selectedZoneLatestAppliedDnsJob.nodeId
+          ),
+          createComparisonRow(
+            copy.zoneColRecordCount,
+            String(selectedZone.records.length),
+            String(readObjectArrayPayloadValue(selectedZoneLatestAppliedDnsJob.payload, "records").length)
+          ),
+          createComparisonRow(
+            copy.recordPreviewTitle,
+            formatDnsRecordPreview(selectedZone.records[0]) || copy.none,
+            formatDnsRecordPreview(
+              readObjectArrayPayloadValue(selectedZoneLatestAppliedDnsJob.payload, "records")[0]
+            ) || copy.none
+          )
+        ]
+      : [];
+  const appComparisonRows =
+    selectedApp && selectedAppLatestAppliedProxyJob
+      ? [
+          createComparisonRow(
+            copy.appColDomain,
+            selectedApp.canonicalDomain,
+            readStringPayloadValue(selectedAppLatestAppliedProxyJob.payload, "serverName")
+          ),
+          createComparisonRow(
+            copy.aliasesLabel,
+            String(selectedApp.aliases.length),
+            String(
+              readStringArrayPayloadValue(selectedAppLatestAppliedProxyJob.payload, "serverAliases")
+                .length
+            )
+          ),
+          createComparisonRow(
+            copy.storageRootLabel,
+            `${selectedApp.storageRoot}/current/public`,
+            readStringPayloadValue(selectedAppLatestAppliedProxyJob.payload, "documentRoot")
+          ),
+          createComparisonRow(
+            copy.targetedNodesLabel,
+            selectedApp.primaryNodeId,
+            selectedAppLatestAppliedProxyJob.nodeId
+          ),
+          createComparisonRow(
+            copy.appColMode,
+            "tls:on",
+            readBooleanPayloadValue(selectedAppLatestAppliedProxyJob.payload, "tls") === null
+              ? null
+              : readBooleanPayloadValue(selectedAppLatestAppliedProxyJob.payload, "tls")
+                ? "tls:on"
+                : "tls:off"
+          )
+        ]
+      : [];
+  const databaseComparisonRows =
+    selectedDatabase && selectedDatabaseLatestAppliedReconcileJob
+      ? [
+          createComparisonRow(
+            copy.databaseColEngine,
+            selectedDatabase.engine,
+            selectedDatabaseLatestAppliedReconcileJob.kind === "postgres.reconcile"
+              ? "postgresql"
+              : "mariadb"
+          ),
+          createComparisonRow(
+            copy.databaseColDatabase,
+            selectedDatabase.databaseName,
+            readStringPayloadValue(selectedDatabaseLatestAppliedReconcileJob.payload, "databaseName")
+          ),
+          createComparisonRow(
+            copy.databaseColUser,
+            selectedDatabase.databaseUser,
+            readStringPayloadValue(selectedDatabaseLatestAppliedReconcileJob.payload, "roleName") ??
+              readStringPayloadValue(selectedDatabaseLatestAppliedReconcileJob.payload, "userName")
+          ),
+          createComparisonRow(
+            copy.targetedNodesLabel,
+            selectedDatabase.primaryNodeId,
+            selectedDatabaseLatestAppliedReconcileJob.nodeId
+          )
+        ]
+      : [];
   const desiredStateLatestImportSummary = data.inventory.latestImport
     ? `${formatDate(data.inventory.latestImport.importedAt, locale)} · ${data.inventory.latestImport.sourcePath}`
     : copy.never;
@@ -2883,6 +3253,19 @@ function renderDesiredStateSection(
             value: `<span class="mono">${escapeHtml(selectedZone.primaryNodeId)}</span>`
           },
           {
+            label: copy.nodeHealthTitle,
+            value: selectedZonePrimaryNodeHealth?.latestJobStatus
+              ? renderPill(
+                  selectedZonePrimaryNodeHealth.latestJobStatus,
+                  selectedZonePrimaryNodeHealth.latestJobStatus === "applied"
+                    ? "success"
+                    : selectedZonePrimaryNodeHealth.latestJobStatus === "failed"
+                      ? "danger"
+                      : "muted"
+                )
+              : renderPill(copy.none, "muted")
+          },
+          {
             label: copy.zoneColRecordCount,
             value: renderPill(
               String(selectedZone.records.length),
@@ -2949,6 +3332,12 @@ function renderDesiredStateSection(
             }
           ])}
         </article>
+        ${renderComparisonTable(
+          copy,
+          copy.desiredAppliedTitle,
+          copy.desiredAppliedDescription,
+          zoneComparisonRows
+        )}
         ${renderRelatedPanel(
           copy.queuedWorkTitle,
           copy.queuedWorkDescription,
@@ -2986,14 +3375,24 @@ function renderDesiredStateSection(
         ${renderRelatedPanel(
           copy.relatedResourcesTitle,
           copy.relatedResourcesDescription,
-          selectedZoneApps.map((app) => ({
-            title: `<a class="detail-link" href="${escapeHtml(
-              buildDashboardViewUrl("desired-state", "desired-state-apps", app.slug)
-            )}">${escapeHtml(app.slug)}</a>`,
-            meta: escapeHtml(app.canonicalDomain),
-            summary: escapeHtml(app.primaryNodeId),
-            tone: "default" as const
-          })),
+          [
+            ...selectedZoneApps.map((app) => ({
+              title: `<a class="detail-link" href="${escapeHtml(
+                buildDashboardViewUrl("desired-state", "desired-state-apps", app.slug)
+              )}">${escapeHtml(app.slug)}</a>`,
+              meta: escapeHtml(app.canonicalDomain),
+              summary: escapeHtml(app.primaryNodeId),
+              tone: "default" as const
+            })),
+            ...selectedZoneBackupPolicies.slice(0, 3).map((policy) => ({
+              title: `<a class="detail-link" href="${escapeHtml(
+                buildDashboardViewUrl("desired-state", "desired-state-backups", policy.policySlug)
+              )}">${escapeHtml(policy.policySlug)}</a>`,
+              meta: escapeHtml(policy.targetNodeId),
+              summary: escapeHtml(policy.schedule),
+              tone: "default" as const
+            }))
+          ],
           copy.noRelatedRecords
         )}
         <div class="toolbar">
@@ -3182,6 +3581,19 @@ function renderDesiredStateSection(
             )}</span>`
           },
           {
+            label: copy.nodeHealthTitle,
+            value: selectedAppPrimaryNodeHealth?.latestJobStatus
+              ? renderPill(
+                  selectedAppPrimaryNodeHealth.latestJobStatus,
+                  selectedAppPrimaryNodeHealth.latestJobStatus === "applied"
+                    ? "success"
+                    : selectedAppPrimaryNodeHealth.latestJobStatus === "failed"
+                      ? "danger"
+                      : "muted"
+                )
+              : renderPill(copy.none, "muted")
+          },
+          {
             label: copy.latestSuccessLabel,
             value: selectedAppLatestSuccess
               ? `<a class="detail-link mono" href="${escapeHtml(
@@ -3276,6 +3688,12 @@ function renderDesiredStateSection(
             </div>
           </article>
         </div>
+        ${renderComparisonTable(
+          copy,
+          copy.desiredAppliedTitle,
+          copy.desiredAppliedDescription,
+          appComparisonRows
+        )}
         ${renderRelatedPanel(
           copy.queuedWorkTitle,
           copy.queuedWorkDescription,
@@ -3285,14 +3703,24 @@ function renderDesiredStateSection(
         ${renderRelatedPanel(
           copy.relatedResourcesTitle,
           copy.relatedResourcesDescription,
-          selectedAppDatabases.map((database) => ({
-            title: `<a class="detail-link" href="${escapeHtml(
-              buildDashboardViewUrl("desired-state", "desired-state-databases", database.appSlug)
-            )}">${escapeHtml(database.databaseName)}</a>`,
-            meta: escapeHtml(database.engine),
-            summary: escapeHtml(database.databaseUser),
-            tone: "default" as const
-          })),
+          [
+            ...selectedAppDatabases.map((database) => ({
+              title: `<a class="detail-link" href="${escapeHtml(
+                buildDashboardViewUrl("desired-state", "desired-state-databases", database.appSlug)
+              )}">${escapeHtml(database.databaseName)}</a>`,
+              meta: escapeHtml(database.engine),
+              summary: escapeHtml(database.databaseUser),
+              tone: "default" as const
+            })),
+            ...selectedAppBackupPolicies.slice(0, 3).map((policy) => ({
+              title: `<a class="detail-link" href="${escapeHtml(
+                buildDashboardViewUrl("desired-state", "desired-state-backups", policy.policySlug)
+              )}">${escapeHtml(policy.policySlug)}</a>`,
+              meta: escapeHtml(policy.targetNodeId),
+              summary: escapeHtml(policy.schedule),
+              tone: "default" as const
+            }))
+          ],
           copy.noRelatedRecords
         )}
         ${renderResourceActivityStack(selectedAppJobs, selectedAppAuditEvents)}
@@ -3504,6 +3932,19 @@ function renderDesiredStateSection(
             value: `<span class="mono">${escapeHtml(selectedDatabase.databaseUser)}</span>`
           },
           {
+            label: copy.nodeHealthTitle,
+            value: selectedDatabasePrimaryNodeHealth?.latestJobStatus
+              ? renderPill(
+                  selectedDatabasePrimaryNodeHealth.latestJobStatus,
+                  selectedDatabasePrimaryNodeHealth.latestJobStatus === "applied"
+                    ? "success"
+                    : selectedDatabasePrimaryNodeHealth.latestJobStatus === "failed"
+                      ? "danger"
+                      : "muted"
+                )
+              : renderPill(copy.none, "muted")
+          },
+          {
             label: copy.databaseColMigration,
             value: selectedDatabase.pendingMigrationTo
               ? renderPill(selectedDatabase.pendingMigrationTo, "danger")
@@ -3592,6 +4033,12 @@ function renderDesiredStateSection(
             </div>
           </article>
         </div>
+        ${renderComparisonTable(
+          copy,
+          copy.desiredAppliedTitle,
+          copy.desiredAppliedDescription,
+          databaseComparisonRows
+        )}
         ${renderRelatedPanel(
           copy.queuedWorkTitle,
           copy.queuedWorkDescription,
@@ -3619,7 +4066,15 @@ function renderDesiredStateSection(
               meta: escapeHtml(selectedDatabase.engine),
               summary: escapeHtml(selectedDatabase.databaseUser),
               tone: "default" as const
-            }
+            },
+            ...selectedDatabaseBackupPolicies.slice(0, 3).map((policy) => ({
+              title: `<a class="detail-link" href="${escapeHtml(
+                buildDashboardViewUrl("desired-state", "desired-state-backups", policy.policySlug)
+              )}">${escapeHtml(policy.policySlug)}</a>`,
+              meta: escapeHtml(policy.targetNodeId),
+              summary: escapeHtml(policy.schedule),
+              tone: "default" as const
+            }))
           ],
           copy.noRelatedRecords
         )}
@@ -4036,6 +4491,7 @@ function renderDesiredStateSection(
           }
         ])}
       </article>
+      <p class="section-note muted">${escapeHtml(copy.dailyOperationsSourceNote)}</p>
       ${renderTabs({
         id: "desired-state-create-tabs",
         tabs: createTabs,
@@ -4602,8 +5058,16 @@ function renderDashboard(
     ? data.nodeHealth.find((entry) => entry.nodeId === selectedBackupPolicySummary.targetNodeId)
     : undefined;
   const failedJobFocus = data.jobHistory.filter((job) => job.status === "failed").slice(0, 6);
+  const jobNodeGroups = groupItemsBy(data.jobHistory, (job) => job.nodeId).slice(0, 6);
   const jobKindGroups = groupItemsBy(data.jobHistory, (job) => job.kind).slice(0, 6);
+  const jobStatusGroups = groupItemsBy(data.jobHistory, (job) => job.status ?? "queued").slice(0, 4);
   const auditEventGroups = groupItemsBy(data.auditEvents, (event) => event.eventType).slice(0, 6);
+  const auditActorGroups = groupItemsBy(
+    data.auditEvents,
+    (event) => `${event.actorType}:${event.actorId ?? "unknown"}`
+  ).slice(0, 6);
+  const driftNodeGroups = groupItemsBy(data.drift, (entry) => entry.nodeId).slice(0, 6);
+  const driftKindGroups = groupItemsBy(data.drift, (entry) => entry.resourceKind).slice(0, 6);
   const backupLatestSuccessRun = data.backups.latestRuns.find((run) => run.status === "succeeded");
   const backupLatestFailedRun = data.backups.latestRuns.find((run) => run.status === "failed");
   const backupCoveredTenantCount = new Set(
@@ -4612,6 +5076,8 @@ function renderDashboard(
   const backupTargetNodeCount = new Set(
     data.backups.policies.map((policy) => policy.targetNodeId)
   ).size;
+  const backupNodeGroups = groupItemsBy(data.backups.latestRuns, (run) => run.nodeId).slice(0, 6);
+  const backupStatusGroups = groupItemsBy(data.backups.latestRuns, (run) => run.status).slice(0, 4);
   const backupPolicyPreviewItems = data.backups.policies.slice(0, 6).map((policy) => ({
     title: `<a class="detail-link" href="${escapeHtml(
       buildDashboardViewUrl("backups", undefined, policy.policySlug)
@@ -5403,6 +5869,99 @@ function renderDashboard(
     copy.noRelatedRecords
   );
 
+  const auditActorsPanel = renderRelatedPanel(
+    copy.auditActorsTitle,
+    copy.auditActorsDescription,
+    auditActorGroups.map((group) => ({
+      title: escapeHtml(group.key),
+      meta: escapeHtml(`${group.items.length} event(s)`),
+      summary: escapeHtml(
+        group.items
+          .slice(0, 2)
+          .map((event) => event.entityType ?? event.entityId ?? copy.none)
+          .join(" · ")
+      ),
+      tone: "default" as const
+    })),
+    copy.noRelatedRecords
+  );
+
+  const jobNodesPanel = renderRelatedPanel(
+    copy.jobNodesTitle,
+    copy.jobNodesDescription,
+    jobNodeGroups.map((group) => ({
+      title: `<a class="detail-link mono" href="${escapeHtml(
+        buildDashboardViewUrl("node-health", undefined, group.key)
+      )}">${escapeHtml(group.key)}</a>`,
+      meta: escapeHtml(`${group.items.length} job(s)`),
+      summary: escapeHtml(summarizeGroupStatuses(group.items)),
+      tone: group.items.some((job) => job.status === "failed")
+        ? ("danger" as const)
+        : group.items.some((job) => job.status === "applied")
+          ? ("success" as const)
+          : ("default" as const)
+    })),
+    copy.noJobs
+  );
+
+  const jobKindsPanel = renderRelatedPanel(
+    copy.jobKindsTitle,
+    copy.jobKindsDescription,
+    jobKindGroups.map((group) => ({
+      title: escapeHtml(group.key),
+      meta: escapeHtml(`${group.items.length} job(s)`),
+      summary: escapeHtml(summarizeGroupStatuses(group.items)),
+      tone: group.items.some((job) => job.status === "failed")
+        ? ("danger" as const)
+        : group.items.some((job) => job.status === "applied")
+          ? ("success" as const)
+          : ("default" as const)
+    })),
+    copy.noJobs
+  );
+
+  const driftNodesPanel = renderRelatedPanel(
+    copy.driftNodesTitle,
+    copy.driftNodesDescription,
+    driftNodeGroups.map((group) => ({
+      title: `<a class="detail-link mono" href="${escapeHtml(
+        buildDashboardViewUrl("node-health", undefined, group.key)
+      )}">${escapeHtml(group.key)}</a>`,
+      meta: escapeHtml(`${group.items.length} drift item(s)`),
+      summary: escapeHtml(
+        groupItemsBy(group.items, (entry) => entry.driftStatus)
+          .map((entry) => `${entry.key}:${entry.items.length}`)
+          .join(" · ")
+      ),
+      tone: group.items.some((entry) => entry.driftStatus === "out_of_sync" || entry.driftStatus === "missing_secret")
+        ? ("danger" as const)
+        : group.items.some((entry) => entry.driftStatus === "pending")
+          ? ("default" as const)
+          : ("success" as const)
+    })),
+    copy.noDrift
+  );
+
+  const driftKindsPanel = renderRelatedPanel(
+    copy.driftKindsTitle,
+    copy.driftKindsDescription,
+    driftKindGroups.map((group) => ({
+      title: escapeHtml(group.key),
+      meta: escapeHtml(`${group.items.length} drift item(s)`),
+      summary: escapeHtml(
+        groupItemsBy(group.items, (entry) => entry.driftStatus)
+          .map((entry) => `${entry.key}:${entry.items.length}`)
+          .join(" · ")
+      ),
+      tone: group.items.some((entry) => entry.driftStatus === "out_of_sync" || entry.driftStatus === "missing_secret")
+        ? ("danger" as const)
+        : group.items.some((entry) => entry.driftStatus === "pending")
+          ? ("default" as const)
+          : ("success" as const)
+    })),
+    copy.noDrift
+  );
+
   const backupCoveragePanel = `<article class="panel detail-shell">
     <div class="section-head">
       <div>
@@ -5460,6 +6019,112 @@ function renderDashboard(
       copy.noBackupPolicies
     )}
   </article>`;
+
+  const backupTargetPosturePanel = `<article class="panel detail-shell">
+    <div class="section-head">
+      <div>
+        <h3>${escapeHtml(copy.backupTargetPostureTitle)}</h3>
+        <p class="muted section-description">${escapeHtml(copy.backupTargetPostureDescription)}</p>
+      </div>
+    </div>
+    ${renderDetailGrid([
+      {
+        label: copy.backupPolicyColTargetNode,
+        value: selectedBackupPolicySummary
+          ? `<a class="detail-link mono" href="${escapeHtml(
+              buildDashboardViewUrl("node-health", undefined, selectedBackupPolicySummary.targetNodeId)
+            )}">${escapeHtml(selectedBackupPolicySummary.targetNodeId)}</a>`
+          : renderPill(copy.none, "muted")
+      },
+      {
+        label: copy.nodeHealthTitle,
+        value: selectedBackupPolicyTargetHealth?.latestJobStatus
+          ? renderPill(
+              selectedBackupPolicyTargetHealth.latestJobStatus,
+              selectedBackupPolicyTargetHealth.latestJobStatus === "applied"
+                ? "success"
+                : selectedBackupPolicyTargetHealth.latestJobStatus === "failed"
+                  ? "danger"
+                  : "muted"
+            )
+          : renderPill(copy.none, "muted")
+      },
+      {
+        label: copy.nodeColPending,
+        value: selectedBackupPolicyTargetHealth
+          ? renderPill(
+              String(selectedBackupPolicyTargetHealth.pendingJobCount),
+              selectedBackupPolicyTargetHealth.pendingJobCount > 0 ? "danger" : "success"
+            )
+          : renderPill(copy.none, "muted")
+      },
+      {
+        label: copy.nodeColVersion,
+        value: selectedBackupPolicyTargetHealth?.currentVersion
+          ? renderPill(selectedBackupPolicyTargetHealth.currentVersion, "muted")
+          : renderPill(copy.none, "muted")
+      },
+      {
+        label: copy.navBackupPolicies,
+        value: renderPill(
+          String(
+            selectedBackupPolicySummary
+              ? data.backups.policies.filter(
+                  (policy) => policy.targetNodeId === selectedBackupPolicySummary.targetNodeId
+                ).length
+              : 0
+          ),
+          selectedBackupPolicySummary ? "success" : "muted"
+        )
+      },
+      {
+        label: copy.relatedJobsTitle,
+        value: renderPill(
+          String(selectedBackupPolicySummary ? selectedBackupPolicyRuns.length : 0),
+          selectedBackupPolicySummary && selectedBackupPolicyRuns.length > 0 ? "success" : "muted"
+        )
+      }
+    ])}
+    ${renderRelatedPanel(
+      copy.backupRunSignalsTitle,
+      copy.backupRunSignalsDescription,
+      backupNodeGroups.map((group) => ({
+        title: `<a class="detail-link mono" href="${escapeHtml(
+          buildDashboardViewUrl("node-health", undefined, group.key)
+        )}">${escapeHtml(group.key)}</a>`,
+        meta: escapeHtml(`${group.items.length} run(s)`),
+        summary: escapeHtml(summarizeGroupStatuses(group.items)),
+        tone: group.items.some((run) => run.status === "failed")
+          ? ("danger" as const)
+          : group.items.some((run) => run.status === "succeeded")
+            ? ("success" as const)
+            : ("default" as const)
+      })),
+      copy.noBackups
+    )}
+  </article>`;
+
+  const backupRunSignalsPanel = renderRelatedPanel(
+    copy.backupRunSignalsTitle,
+    copy.backupRunSignalsDescription,
+    backupStatusGroups.map((group) => ({
+      title: escapeHtml(group.key),
+      meta: escapeHtml(`${group.items.length} run(s)`),
+      summary: escapeHtml(
+        group.items
+          .slice(0, 2)
+          .map((run) => `${run.policySlug} · ${run.nodeId}`)
+          .join(" · ")
+      ),
+      tone:
+        group.key === "failed"
+          ? ("danger" as const)
+          : group.key === "succeeded"
+            ? ("success" as const)
+            : ("default" as const)
+    })),
+    copy.noBackups
+  );
 
   const nodeHealthSection = `<section id="section-node-health" class="panel section-panel">
     ${renderSignalStrip([
@@ -5535,6 +6200,8 @@ function renderDashboard(
     <div class="grid grid-two">
       ${selectedDriftPanel}
       <div class="stack">
+        ${driftNodesPanel}
+        ${driftKindsPanel}
         ${selectedDriftActionPanel}
         ${renderJobFeedPanel(copy, locale, selectedDriftJobs)}
         ${renderAuditPanel(copy, locale, selectedDriftAuditEvents)}
@@ -5578,7 +6245,10 @@ function renderDashboard(
       ${selectedJobPanel}
       <div class="stack">
         ${failureFocusPanel}
+        ${jobNodesPanel}
+        ${jobKindsPanel}
         ${auditSignalsPanel}
+        ${auditActorsPanel}
         ${renderJobFeedPanel(
           copy,
           locale,
@@ -5625,6 +6295,8 @@ function renderDashboard(
       ${selectedBackupRunPanel}
       <div class="stack">
         ${backupCoveragePanel}
+        ${backupTargetPosturePanel}
+        ${backupRunSignalsPanel}
         ${selectedBackupPolicyPanel}
         ${selectedBackupRunsPanel}
         ${renderRelatedPanel(

@@ -9,8 +9,8 @@ two-node layout.
 - Secondary host: `vps-16535090.vps.ovh.ca`
 - `postgresql-shp` replicates over WireGuard on `10.89.0.0/24`
 - `spanel-api`, `spanel-web`, and `spanel-worker` are installed on both nodes
-- On the secondary node, the `spanel-*` services remain installed but disabled
-  while PostgreSQL is still in physical standby mode
+- On the secondary node, `spanel-web` stays enabled for passive smoke tests
+  while `spanel-api` and `spanel-worker` remain disabled until promotion
 - `spanel-api` and `spanel-worker` must stay stopped on the standby while
   PostgreSQL is read-only, because their startup path applies migrations and
   other control-plane bootstrap writes
@@ -31,7 +31,7 @@ Keep the standby node updated with the same installed `SHP` release as the
 primary, but leave `spanel-*` disabled until a promotion.
 
 If the standby does not have the build toolchain available, refresh it from the
-installed runtime on the primary:
+installed runtime on the primary and keep only `spanel-web` active:
 
 ```bash
 release_version="$(basename "$(readlink -f /opt/simplehost/spanel/current)")"
@@ -63,11 +63,14 @@ ssh root@vps-16535090.vps.ovh.ca \
    chown root:spanel /etc/spanel/api.env /etc/spanel/web.env /etc/spanel/worker.env && \
    chmod 0640 /etc/spanel/api.env /etc/spanel/web.env /etc/spanel/worker.env && \
    systemctl daemon-reload && \
-   systemctl disable spanel-api.service spanel-web.service spanel-worker.service"
+   systemctl disable spanel-api.service spanel-worker.service && \
+   systemctl stop spanel-api.service spanel-worker.service && \
+   systemctl enable spanel-web.service && \
+   systemctl restart spanel-web.service"
 ```
 
-For a passive smoke test on the secondary, only validate `spanel-web` before a
-promotion. `spanel-api` and `spanel-worker` are expected to fail while
+For a passive smoke test on the secondary, validate `spanel-web` only.
+`spanel-api` and `spanel-worker` are expected to stay down while
 `postgresql-shp` is still in recovery mode.
 
 ## Manual promotion sequence
@@ -134,8 +137,9 @@ standby from the currently active primary.
 - Confirm `pg_stat_wal_receiver.status = streaming` on that standby.
 - Confirm `/opt/simplehost/spanel/current` on the standby points to the same
   installed release generation you expect to promote.
-- Confirm `spanel-api`, `spanel-web`, and `spanel-worker` are still disabled on
-  the standby before promotion.
+- Confirm `spanel-api` and `spanel-worker` are still disabled on the standby
+  before promotion, and that `spanel-web` is only being used for passive smoke
+  tests.
 - Stop `spanel-worker`, `spanel-api`, and `spanel-web` on the current primary.
 - Promote the standby that will become the new primary:
 
@@ -151,8 +155,8 @@ standby from the currently active primary.
 - Repoint any front-facing proxy or traffic entrypoint back to the promoted
   node.
 - Rebuild the old primary as a fresh standby from the new primary.
-- Keep `spanel-*` disabled on the rebuilt standby after failback until the next
-  planned switchover or incident.
+- Keep `spanel-api` and `spanel-worker` disabled on the rebuilt standby after
+  failback. `spanel-web` may stay enabled for passive validation only.
 
 ## Notes
 

@@ -50,8 +50,11 @@ activate_local() {
   systemctl daemon-reload
 
   if [[ "${mode}" == "passive" ]]; then
-    systemctl disable spanel-api.service spanel-web.service spanel-worker.service || true
-    systemctl stop spanel-api.service spanel-web.service spanel-worker.service || true
+    systemctl disable spanel-api.service spanel-worker.service || true
+    systemctl stop spanel-api.service spanel-worker.service || true
+    systemctl enable spanel-web.service || true
+    systemctl restart spanel-web.service
+    systemctl is-active spanel-web.service
     echo "Installed SHP ${version} locally in passive mode"
     return
   fi
@@ -88,8 +91,11 @@ activate_remote() {
 
   if [[ "${mode}" == "passive" ]]; then
     ssh "${target_host}" \
-      "systemctl disable spanel-api.service spanel-web.service spanel-worker.service || true && \
-       systemctl stop spanel-api.service spanel-web.service spanel-worker.service || true"
+      "systemctl disable spanel-api.service spanel-worker.service || true && \
+       systemctl stop spanel-api.service spanel-worker.service || true && \
+       systemctl enable spanel-web.service || true && \
+       systemctl restart spanel-web.service && \
+       systemctl is-active spanel-web.service"
     echo "Installed SHP ${version} on ${target_host} in passive mode"
     return
   fi

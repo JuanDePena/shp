@@ -484,6 +484,19 @@ function renderBaseStyleBlock(): string {
         background: rgba(216, 229, 244, 0.95);
       }
 
+      .comparison-table th:nth-child(1) {
+        width: 14rem;
+      }
+
+      .comparison-table th:nth-child(4),
+      .comparison-table td:nth-child(4) {
+        width: 8rem;
+      }
+
+      .comparison-state-cell {
+        white-space: nowrap;
+      }
+
       .pill {
         display: inline-flex;
         align-items: center;
@@ -517,6 +530,14 @@ function renderBaseStyleBlock(): string {
       .empty {
         margin: 0;
         color: var(--muted);
+      }
+
+      .section-note {
+        margin: 0;
+        padding: 0.8rem 0.95rem;
+        border-radius: 0.95rem;
+        border: 1px dashed rgba(13, 32, 56, 0.16);
+        background: rgba(255, 255, 255, 0.56);
       }
 
       details {

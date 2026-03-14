@@ -3039,8 +3039,8 @@ function renderDashboard(
           {
             label: copy.resourcesWithDrift,
             value: renderPill(
-              String(selectedNodeHealth.driftedResourceCount ?? 0),
-              (selectedNodeHealth.driftedResourceCount ?? 0) > 0 ? "danger" : "success"
+              String(selectedNodeDrift.length),
+              selectedNodeDrift.length > 0 ? "danger" : "success"
             )
           },
           {

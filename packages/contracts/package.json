@@ -1,6 +1,6 @@
 {
   "name": "@simplehost/panel-contracts",
-  "version": "2603.14.06",
+  "version": "2603.14.08",
   "private": true,
   "type": "module",
   "main": "dist/index.js",

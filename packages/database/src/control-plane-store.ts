@@ -3682,7 +3682,7 @@ export async function createPostgresControlPlaneStore(
              control.version AS current_version,
              control.last_seen_at,
              COALESCE(pending.pending_job_count, 0) AS pending_job_count,
-             COALESCE(drift.drifted_resource_count, 0) AS drifted_resource_count,
+             0 AS drifted_resource_count,
              COALESCE(zones.primary_zone_count, 0) AS primary_zone_count,
              COALESCE(apps.primary_app_count, 0) AS primary_app_count,
              COALESCE(backups.backup_policy_count, 0) AS backup_policy_count,
@@ -3699,15 +3699,8 @@ export async function createPostgresControlPlaneStore(
            ) pending
              ON pending.node_id = nodes.node_id
            LEFT JOIN (
-             SELECT node_id, COUNT(*) AS drifted_resource_count
-             FROM shp_resource_drift_status
-             WHERE drift_status <> 'in_sync'
-             GROUP BY node_id
-           ) drift
-             ON drift.node_id = nodes.node_id
-           LEFT JOIN (
              SELECT primary_node_id AS node_id, COUNT(*) AS primary_zone_count
-             FROM shp_zones
+             FROM shp_dns_zones
              GROUP BY primary_node_id
            ) zones
              ON zones.node_id = nodes.node_id

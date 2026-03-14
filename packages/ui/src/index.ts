@@ -1002,7 +1002,7 @@ ${renderBaseStyleBlock()}
         top: calc(100% + 0.55rem);
         right: 0;
         z-index: 20;
-        width: min(32rem, calc(100vw - 2.4rem));
+        width: min(28rem, calc(100vw - 2.4rem));
         padding: 0.9rem;
         border: 1px solid rgba(13, 32, 56, 0.12);
         border-radius: 1.2rem;
@@ -1089,7 +1089,7 @@ ${renderBaseStyleBlock()}
 
       .profile-facts {
         display: grid;
-        grid-template-columns: 7.4rem minmax(0, 1fr);
+        grid-template-columns: 9.25rem minmax(0, 1fr);
         gap: 0.5rem 0.9rem;
         margin: 0;
         align-items: start;

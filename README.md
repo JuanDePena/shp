@@ -342,7 +342,7 @@ Current packaged service artifacts:
 
 ## References
 
-- [`/opt/simplehost/AGENTS.md`](/opt/simplehost/AGENTS.md)
+- [`/opt/simplehost/repos/simplehost-platform-config/docs/AGENTS.md`](/opt/simplehost/repos/simplehost-platform-config/docs/AGENTS.md)
 - [`/opt/simplehost/repos/simplehost-manager/README.md`](/opt/simplehost/repos/simplehost-manager/README.md)
 - [`/opt/simplehost/repos/simplehost-platform-config/docs/ARQUITECTURE.md`](/opt/simplehost/repos/simplehost-platform-config/docs/ARQUITECTURE.md)
 - [`/opt/simplehost/repos/simplehost-platform-config/docs/MULTI_DOMAIN.md`](/opt/simplehost/repos/simplehost-platform-config/docs/MULTI_DOMAIN.md)

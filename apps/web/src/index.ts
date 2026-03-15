@@ -52,6 +52,13 @@ const localeCookieName = "shp_lang";
 type WebLocale = "en" | "es";
 type DashboardView =
   | "overview"
+  | "tenants"
+  | "nodes"
+  | "zones"
+  | "apps"
+  | "databases"
+  | "backup-policies"
+  | "jobs"
   | "node-health"
   | "resource-drift"
   | "job-history"
@@ -69,6 +76,7 @@ const desiredStateTabIds = [
 ] as const;
 
 type DesiredStateTabId = (typeof desiredStateTabIds)[number];
+type NodeWorkspaceTabId = "nodes-health" | "nodes-spec";
 
 interface DashboardData {
   currentUser: AuthenticatedUserSummary;
@@ -117,6 +125,12 @@ interface WebCopy {
   navApps: string;
   navDatabases: string;
   navBackupPolicies: string;
+  tenantWorkspaceDescription: string;
+  nodeWorkspaceDescription: string;
+  zoneWorkspaceDescription: string;
+  appWorkspaceDescription: string;
+  databaseWorkspaceDescription: string;
+  backupWorkspaceDescription: string;
   dashboardHeading: string;
   dashboardSubheading: string;
   overviewDescription: string;
@@ -405,6 +419,12 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     navApps: "Apps",
     navDatabases: "Databases",
     navBackupPolicies: "Backup policies",
+    tenantWorkspaceDescription: "Tenant scope, related resources and recent platform activity.",
+    nodeWorkspaceDescription: "Health, desired topology and operator actions by node.",
+    zoneWorkspaceDescription: "DNS zones, records, dispatch state and related drift.",
+    appWorkspaceDescription: "Runtime topology, proxy operations and app-linked resources.",
+    databaseWorkspaceDescription: "Database topology, reconcile posture and related operations.",
+    backupWorkspaceDescription: "Policy definition, retention and coverage before backup runs.",
     dashboardHeading: "Control plane",
     dashboardSubheading: "Operate nodes, jobs, backups, and desired state from a single control surface.",
     overviewDescription: "Live platform counts plus the main control-plane actions.",
@@ -702,6 +722,12 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     navApps: "Apps",
     navDatabases: "Bases de datos",
     navBackupPolicies: "Políticas de backup",
+    tenantWorkspaceDescription: "Alcance del tenant, recursos relacionados y actividad reciente de plataforma.",
+    nodeWorkspaceDescription: "Salud, topología deseada y acciones operativas por nodo.",
+    zoneWorkspaceDescription: "Zonas DNS, registros, estado de dispatch y drift relacionado.",
+    appWorkspaceDescription: "Topología runtime, operaciones de proxy y recursos vinculados a la app.",
+    databaseWorkspaceDescription: "Topología de base de datos, estado de reconcile y operaciones relacionadas.",
+    backupWorkspaceDescription: "Definición de políticas, retención y cobertura antes de las ejecuciones.",
     dashboardHeading: "Plano de control",
     dashboardSubheading: "Opera nodos, jobs, backups y estado deseado desde una sola consola.",
     overviewDescription: "Conteos vivos de la plataforma y las acciones principales del control plane.",
@@ -1103,6 +1129,13 @@ function sanitizeReturnTo(value: string | null | undefined): string {
 
 function normalizeDashboardView(value: string | null | undefined): DashboardView {
   switch (value) {
+    case "tenants":
+    case "nodes":
+    case "zones":
+    case "apps":
+    case "databases":
+    case "backup-policies":
+    case "jobs":
     case "node-health":
     case "resource-drift":
     case "job-history":
@@ -1118,6 +1151,53 @@ function normalizeDesiredStateTab(value: string | null | undefined): DesiredStat
   return desiredStateTabIds.find((candidate) => candidate === value) ?? "desired-state-create";
 }
 
+function normalizeNodeWorkspaceTab(value: string | null | undefined): NodeWorkspaceTabId {
+  return value === "nodes-spec" ? "nodes-spec" : "nodes-health";
+}
+
+function resolveDesiredStateTabForView(
+  view: DashboardView,
+  tab: DesiredStateTabId
+): DesiredStateTabId {
+  switch (view) {
+    case "tenants":
+      return "desired-state-tenants";
+    case "nodes":
+      return "desired-state-nodes";
+    case "zones":
+      return "desired-state-zones";
+    case "apps":
+      return "desired-state-apps";
+    case "databases":
+      return "desired-state-databases";
+    case "backup-policies":
+      return "desired-state-backups";
+    default:
+      return tab;
+  }
+}
+
+function getObjectViewLabel(copy: WebCopy, view: DashboardView): string | undefined {
+  switch (view) {
+    case "tenants":
+      return copy.navTenants;
+    case "nodes":
+      return copy.navNodes;
+    case "zones":
+      return copy.navZones;
+    case "apps":
+      return copy.navApps;
+    case "databases":
+      return copy.navDatabases;
+    case "backup-policies":
+      return copy.navBackupPolicies;
+    case "jobs":
+      return copy.navJobs;
+    default:
+      return undefined;
+  }
+}
+
 function normalizeDashboardFocus(value: string | null | undefined): string | undefined {
   const normalized = value?.trim();
   return normalized ? normalized : undefined;
@@ -1130,7 +1210,7 @@ function normalizeFilterValue(value: string | null | undefined): string | undefi
 
 function buildDashboardViewUrl(
   view: DashboardView,
-  tab?: DesiredStateTabId,
+  tab?: string,
   focus?: string,
   filters: Record<string, string | undefined> = {}
 ): string {
@@ -1142,6 +1222,10 @@ function buildDashboardViewUrl(
 
   if (view === "desired-state") {
     search.set("tab", tab ?? "desired-state-create");
+  }
+
+  if (view === "nodes" && tab) {
+    search.set("tab", tab);
   }
 
   if (view !== "overview" && focus) {
@@ -1159,6 +1243,12 @@ function buildDashboardViewUrl(
 }
 
 function getDashboardHeading(copy: WebCopy, view: DashboardView): string {
+  const objectLabel = getObjectViewLabel(copy, view);
+
+  if (objectLabel) {
+    return objectLabel;
+  }
+
   switch (view) {
     case "node-health":
       return copy.nodeHealthTitle;
@@ -1177,6 +1267,25 @@ function getDashboardHeading(copy: WebCopy, view: DashboardView): string {
 }
 
 function getDashboardSubheading(copy: WebCopy, view: DashboardView): string {
+  switch (view) {
+    case "tenants":
+      return copy.tenantWorkspaceDescription;
+    case "nodes":
+      return copy.nodeWorkspaceDescription;
+    case "zones":
+      return copy.zoneWorkspaceDescription;
+    case "apps":
+      return copy.appWorkspaceDescription;
+    case "databases":
+      return copy.databaseWorkspaceDescription;
+    case "backup-policies":
+      return copy.backupWorkspaceDescription;
+    case "jobs":
+      return copy.jobHistoryDescription;
+    default:
+      break;
+  }
+
   switch (view) {
     case "node-health":
       return copy.nodeHealthDescription;
@@ -2344,7 +2453,8 @@ function renderDesiredStateSection(
   copy: WebCopy,
   locale: WebLocale,
   defaultTabId: DesiredStateTabId,
-  focus?: string
+  focus?: string,
+  options: { mode?: "full" | "single" } = {}
 ): string {
   const tenantOptions = data.desiredState.spec.tenants.map((tenant) => ({
     value: tenant.slug,
@@ -2472,7 +2582,7 @@ function renderDesiredStateSection(
     cells: [
       renderFocusLink(
         tenant.slug,
-        buildDashboardViewUrl("desired-state", "desired-state-tenants", tenant.slug),
+        buildDashboardViewUrl("tenants", undefined, tenant.slug),
         selectedTenant?.slug === tenant.slug,
         copy.selectedStateLabel
       ),
@@ -2484,7 +2594,7 @@ function renderDesiredStateSection(
     cells: [
       renderFocusLink(
         node.nodeId,
-        buildDashboardViewUrl("desired-state", "desired-state-nodes", node.nodeId),
+        buildDashboardViewUrl("nodes", "nodes-spec", node.nodeId),
         selectedNode?.nodeId === node.nodeId,
         copy.selectedStateLabel
       ),
@@ -2503,7 +2613,7 @@ function renderDesiredStateSection(
     cells: [
       renderFocusLink(
         zone.zoneName,
-        buildDashboardViewUrl("desired-state", "desired-state-zones", zone.zoneName),
+        buildDashboardViewUrl("zones", undefined, zone.zoneName),
         selectedZone?.zoneName === zone.zoneName,
         copy.selectedStateLabel
       ),
@@ -2522,7 +2632,7 @@ function renderDesiredStateSection(
     cells: [
       renderFocusLink(
         app.slug,
-        buildDashboardViewUrl("desired-state", "desired-state-apps", app.slug),
+        buildDashboardViewUrl("apps", undefined, app.slug),
         selectedApp?.slug === app.slug,
         copy.selectedStateLabel
       ),
@@ -2548,7 +2658,7 @@ function renderDesiredStateSection(
     cells: [
       renderFocusLink(
         database.appSlug,
-        buildDashboardViewUrl("desired-state", "desired-state-databases", database.appSlug),
+        buildDashboardViewUrl("databases", undefined, database.appSlug),
         selectedDatabase?.appSlug === database.appSlug,
         copy.selectedStateLabel
       ),
@@ -2578,7 +2688,7 @@ function renderDesiredStateSection(
     cells: [
       renderFocusLink(
         policy.policySlug,
-        buildDashboardViewUrl("desired-state", "desired-state-backups", policy.policySlug),
+        buildDashboardViewUrl("backup-policies", undefined, policy.policySlug),
         selectedBackupPolicy?.policySlug === policy.policySlug,
         copy.selectedStateLabel
       ),
@@ -5640,6 +5750,17 @@ function renderDesiredStateSection(
     }
   ];
 
+  if (options.mode === "single") {
+    const selectedTab =
+      tabs.find((tab) => tab.id === defaultTabId) ??
+      tabs.find((tab) => tab.id === "desired-state-create") ??
+      tabs[0];
+
+    return `<section id="section-${escapeHtml(selectedTab.id)}" class="panel section-panel">
+      ${selectedTab.panelHtml}
+    </section>`;
+  }
+
   return `<section id="section-desired-state" class="panel section-panel">
     ${renderTabs({
       id: "desired-state-tabs",
@@ -5647,6 +5768,18 @@ function renderDesiredStateSection(
       defaultTabId
     })}
   </section>`;
+}
+
+function renderSingleDesiredStateObjectView(
+  data: DashboardData,
+  copy: WebCopy,
+  locale: WebLocale,
+  defaultTabId: DesiredStateTabId,
+  focus?: string
+): string {
+  return renderDesiredStateSection(data, copy, locale, defaultTabId, focus, {
+    mode: "single"
+  });
 }
 
 function renderDashboard(
@@ -5660,6 +5793,8 @@ function renderDashboard(
 ): string {
   const copy = copyByLocale[locale];
   const currentUrl = new URL(`http://localhost${currentPath}`);
+  const resolvedDesiredStateTab = resolveDesiredStateTabForView(view, desiredStateTab);
+  const nodeWorkspaceTab = normalizeNodeWorkspaceTab(currentUrl.searchParams.get("tab"));
   const jobStatusFilter = normalizeFilterValue(currentUrl.searchParams.get("jobStatus"));
   const jobKindFilter = normalizeFilterValue(currentUrl.searchParams.get("jobKind"));
   const jobNodeFilter = normalizeFilterValue(currentUrl.searchParams.get("jobNode"));
@@ -5804,7 +5939,7 @@ function renderDashboard(
     backupPolicy: backupPolicyFilter
   };
   const selectedNodeHealth =
-    view === "node-health"
+    view === "node-health" || view === "nodes"
       ? data.nodeHealth.find((node) => node.nodeId === focus) ?? data.nodeHealth[0]
       : undefined;
   const codeServerCopy =
@@ -5943,7 +6078,7 @@ function renderDashboard(
   }));
 
   const selectedJob =
-    view === "job-history"
+    view === "job-history" || view === "jobs"
       ? filteredJobHistory.find((job) => job.jobId === focus) ?? filteredJobHistory[0] ?? data.jobHistory[0]
       : undefined;
   const jobRows: DataTableRow[] = filteredJobHistory.map((job) => ({
@@ -6553,29 +6688,66 @@ function renderDashboard(
       ]
     },
     {
+      id: "resources",
+      label: copy.navResources,
+      items: [
+        {
+          id: "tenants",
+          label: copy.navTenants,
+          href: buildDashboardViewUrl("tenants", undefined, focus),
+          badge: String(data.desiredState.spec.tenants.length),
+          active:
+            view === "tenants" ||
+            (view === "desired-state" && resolvedDesiredStateTab === "desired-state-tenants")
+        },
+        {
+          id: "nodes",
+          label: copy.navNodes,
+          href: buildDashboardViewUrl("nodes", "nodes-health", focus),
+          badge: String(data.nodeHealth.length),
+          active: view === "nodes" || view === "node-health"
+        },
+        {
+          id: "zones",
+          label: copy.navZones,
+          href: buildDashboardViewUrl("zones", undefined, focus),
+          badge: String(data.desiredState.spec.zones.length),
+          active:
+            view === "zones" ||
+            (view === "desired-state" && resolvedDesiredStateTab === "desired-state-zones")
+        },
+        {
+          id: "apps",
+          label: copy.navApps,
+          href: buildDashboardViewUrl("apps", undefined, focus),
+          badge: String(data.desiredState.spec.apps.length),
+          active:
+            view === "apps" ||
+            (view === "desired-state" && resolvedDesiredStateTab === "desired-state-apps")
+        },
+        {
+          id: "databases",
+          label: copy.navDatabases,
+          href: buildDashboardViewUrl("databases", undefined, focus),
+          badge: String(data.desiredState.spec.databases.length),
+          active:
+            view === "databases" ||
+            (view === "desired-state" && resolvedDesiredStateTab === "desired-state-databases")
+        }
+      ]
+    },
+    {
       id: "operations",
       label: copy.navOperations,
       items: [
         {
-          id: "node-health",
-          label: copy.navNodeHealth,
-          href: buildDashboardViewUrl("node-health"),
-          badge: String(data.nodeHealth.length),
-          active: view === "node-health"
-        },
-        {
-          id: "resource-drift",
-          label: copy.navDrift,
-          href: buildDashboardViewUrl("resource-drift"),
-          badge: String(data.overview.driftedResourceCount),
-          active: view === "resource-drift"
-        },
-        {
-          id: "job-history",
-          label: copy.navJobs,
-          href: buildDashboardViewUrl("job-history"),
-          badge: String(data.jobHistory.length),
-          active: view === "job-history"
+          id: "backup-policies",
+          label: copy.navBackupPolicies,
+          href: buildDashboardViewUrl("backup-policies", undefined, focus),
+          badge: String(data.desiredState.spec.backupPolicies.length),
+          active:
+            view === "backup-policies" ||
+            (view === "desired-state" && resolvedDesiredStateTab === "desired-state-backups")
         },
         {
           id: "backups",
@@ -6583,60 +6755,13 @@ function renderDashboard(
           href: buildDashboardViewUrl("backups"),
           badge: String(data.backups.latestRuns.length),
           active: view === "backups"
-        }
-      ]
-    },
-    {
-      id: "desired-state",
-      label: copy.navResources,
-      items: [
-        {
-          id: "create",
-          label: copy.navCreate,
-          href: buildDashboardViewUrl("desired-state", "desired-state-create"),
-          active: view === "desired-state" && desiredStateTab === "desired-state-create"
         },
         {
-          id: "tenants",
-          label: copy.navTenants,
-          href: buildDashboardViewUrl("desired-state", "desired-state-tenants"),
-          badge: String(data.desiredState.spec.tenants.length),
-          active: view === "desired-state" && desiredStateTab === "desired-state-tenants"
-        },
-        {
-          id: "nodes",
-          label: copy.navNodes,
-          href: buildDashboardViewUrl("desired-state", "desired-state-nodes"),
-          badge: String(data.desiredState.spec.nodes.length),
-          active: view === "desired-state" && desiredStateTab === "desired-state-nodes"
-        },
-        {
-          id: "zones",
-          label: copy.navZones,
-          href: buildDashboardViewUrl("desired-state", "desired-state-zones"),
-          badge: String(data.desiredState.spec.zones.length),
-          active: view === "desired-state" && desiredStateTab === "desired-state-zones"
-        },
-        {
-          id: "apps",
-          label: copy.navApps,
-          href: buildDashboardViewUrl("desired-state", "desired-state-apps"),
-          badge: String(data.desiredState.spec.apps.length),
-          active: view === "desired-state" && desiredStateTab === "desired-state-apps"
-        },
-        {
-          id: "databases",
-          label: copy.navDatabases,
-          href: buildDashboardViewUrl("desired-state", "desired-state-databases"),
-          badge: String(data.desiredState.spec.databases.length),
-          active: view === "desired-state" && desiredStateTab === "desired-state-databases"
-        },
-        {
-          id: "backup-policies",
-          label: copy.navBackupPolicies,
-          href: buildDashboardViewUrl("desired-state", "desired-state-backups"),
-          badge: String(data.desiredState.spec.backupPolicies.length),
-          active: view === "desired-state" && desiredStateTab === "desired-state-backups"
+          id: "jobs",
+          label: copy.navJobs,
+          href: buildDashboardViewUrl("jobs"),
+          badge: String(data.jobHistory.length),
+          active: view === "jobs" || view === "job-history"
         }
       ]
     }
@@ -8193,12 +8318,93 @@ function renderDashboard(
     data,
     copy,
     locale,
-    desiredStateTab,
+    resolvedDesiredStateTab,
+    focus
+  );
+
+  const tenantsSection = renderSingleDesiredStateObjectView(
+    data,
+    copy,
+    locale,
+    "desired-state-tenants",
+    focus
+  );
+
+  const nodesSection = `<section id="section-nodes" class="panel section-panel">
+    ${renderTabs({
+      id: "nodes-object-tabs",
+      defaultTabId: nodeWorkspaceTab,
+      tabs: [
+        {
+          id: "nodes-health",
+          label: copy.nodeHealthTitle,
+          href: buildDashboardViewUrl("nodes", "nodes-health", focus),
+          panelHtml: nodeHealthSection
+        },
+        {
+          id: "nodes-spec",
+          label: copy.navDesiredState,
+          href: buildDashboardViewUrl("nodes", "nodes-spec", focus),
+          panelHtml: renderSingleDesiredStateObjectView(
+            data,
+            copy,
+            locale,
+            "desired-state-nodes",
+            focus
+          )
+        }
+      ]
+    })}
+  </section>`;
+
+  const zonesSection = renderSingleDesiredStateObjectView(
+    data,
+    copy,
+    locale,
+    "desired-state-zones",
+    focus
+  );
+
+  const appsSection = renderSingleDesiredStateObjectView(
+    data,
+    copy,
+    locale,
+    "desired-state-apps",
+    focus
+  );
+
+  const databasesSection = renderSingleDesiredStateObjectView(
+    data,
+    copy,
+    locale,
+    "desired-state-databases",
+    focus
+  );
+
+  const backupPoliciesSection = renderSingleDesiredStateObjectView(
+    data,
+    copy,
+    locale,
+    "desired-state-backups",
     focus
   );
 
   const body = (() => {
     switch (view) {
+      case "tenants":
+        return tenantsSection;
+      case "nodes":
+        return nodesSection;
+      case "zones":
+        return zonesSection;
+      case "apps":
+        return appsSection;
+      case "databases":
+        return databasesSection;
+      case "backup-policies":
+        return backupPoliciesSection;
+      case "jobs":
+        return jobHistorySection;
       case "node-health":
         return nodeHealthSection;
       case "resource-drift":

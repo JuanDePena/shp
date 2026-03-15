@@ -1244,6 +1244,42 @@ function normalizeFilterValue(value: string | null | undefined): string | undefi
   return normalized ? normalized : undefined;
 }
 
+function resolveCanonicalDashboardTarget(
+  view: DashboardView,
+  tab?: string
+): { view: DashboardView; tab?: string } {
+  if (view === "job-history") {
+    return { view: "jobs" };
+  }
+
+  if (view === "node-health") {
+    return { view: "nodes", tab: tab ?? "nodes-health" };
+  }
+
+  if (view === "desired-state") {
+    switch (tab) {
+      case "desired-state-tenants":
+        return { view: "tenants", tab: "tenants-spec" };
+      case "desired-state-nodes":
+        return { view: "nodes", tab: "nodes-spec" };
+      case "desired-state-zones":
+        return { view: "zones", tab: "zones-spec" };
+      case "desired-state-apps":
+        return { view: "apps", tab: "apps-spec" };
+      case "desired-state-databases":
+        return { view: "databases", tab: "databases-spec" };
+      case "desired-state-backups":
+        return { view: "backup-policies", tab: "backup-policies-spec" };
+      case "desired-state-create":
+        return { view: "tenants", tab: "tenants-spec" };
+      default:
+        return { view, tab: tab ?? "desired-state-create" };
+    }
+  }
+
+  return { view, tab };
+}
+
 function buildDashboardViewUrl(
   view: DashboardView,
   tab?: string,
@@ -1251,47 +1287,9 @@ function buildDashboardViewUrl(
   filters: Record<string, string | undefined> = {}
 ): string {
   const search = new URLSearchParams();
-  let targetView: DashboardView = view;
-  let targetTab = tab;
-
-  if (view === "job-history") {
-    targetView = "jobs";
-    targetTab = undefined;
-  } else if (view === "node-health") {
-    targetView = "nodes";
-    targetTab = tab ?? "nodes-health";
-  } else if (view === "desired-state") {
-    switch (tab) {
-      case "desired-state-tenants":
-        targetView = "tenants";
-        targetTab = "tenants-spec";
-        break;
-      case "desired-state-nodes":
-        targetView = "nodes";
-        targetTab = "nodes-spec";
-        break;
-      case "desired-state-zones":
-        targetView = "zones";
-        targetTab = "zones-spec";
-        break;
-      case "desired-state-apps":
-        targetView = "apps";
-        targetTab = "apps-spec";
-        break;
-      case "desired-state-databases":
-        targetView = "databases";
-        targetTab = "databases-spec";
-        break;
-      case "desired-state-backups":
-        targetView = "backup-policies";
-        targetTab = "backup-policies-spec";
-        break;
-      default:
-        targetView = view;
-        targetTab = tab ?? "desired-state-create";
-        break;
-    }
-  }
+  const target = resolveCanonicalDashboardTarget(view, tab);
+  const targetView = target.view;
+  const targetTab = target.tab;
 
   if (targetView !== "overview") {
     search.set("view", targetView);
@@ -9108,11 +9106,31 @@ async function handleDashboard(request: IncomingMessage, response: ServerRespons
   const url = new URL(request.url ?? "/", "http://127.0.0.1");
   const locale = readLocale(request);
   const view = normalizeDashboardView(url.searchParams.get("view"));
-  const desiredStateTab = normalizeDesiredStateTab(url.searchParams.get("tab"));
+  const rawTab = url.searchParams.get("tab") ?? undefined;
+  const desiredStateTab = normalizeDesiredStateTab(rawTab);
   const focus = normalizeDashboardFocus(url.searchParams.get("focus"));
 
   if (!token) {
     writeHtml(response, 200, renderLoginPage(locale, getNoticeFromUrl(url)));
+    return;
+  }
+
+  const canonicalTarget = resolveCanonicalDashboardTarget(view, rawTab);
+  const extraFilters = Object.fromEntries(
+    Array.from(url.searchParams.entries()).filter(
+      ([key]) => key !== "view" && key !== "tab" && key !== "focus"
+    )
+  );
+  const canonicalLocation = buildDashboardViewUrl(
+    canonicalTarget.view,
+    canonicalTarget.tab,
+    focus,
+    extraFilters
+  );
+  const currentLocation = sanitizeReturnTo(`${url.pathname}${url.search}`);
+
+  if (canonicalLocation !== currentLocation) {
+    redirect(response, canonicalLocation);
     return;
   }
 

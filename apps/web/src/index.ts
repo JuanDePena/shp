@@ -8041,20 +8041,15 @@ function renderDashboard(
       recordsLabel: copy.records,
       defaultPageSize: 10
     })}
-    <div class="grid grid-two">
+    <div class="grid grid-node-health-focus">
       <div class="stack">
         ${nodeDiagnosticsPanel}
-        ${codeServerUpdatePanel}
       </div>
       <div class="stack">
-        ${relatedNodeJobsPanel}
-        ${codeServerHistoryPanel}
+        ${codeServerUpdatePanel}
+      </div>
+      <div class="grid-span-all">
         ${relatedNodeDriftPanel}
-        ${renderAuditPanel(
-          copy,
-          locale,
-          selectedNodeAuditEvents.length > 0 ? selectedNodeAuditEvents : data.auditEvents.slice(0, 6)
-        )}
       </div>
     </div>
   </section>`;

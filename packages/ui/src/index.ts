@@ -268,6 +268,15 @@ function renderBaseStyleBlock(): string {
         grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
       }
 
+      .grid-node-health-focus {
+        grid-template-columns: minmax(0, 1.7fr) minmax(21rem, 0.9fr);
+        align-items: start;
+      }
+
+      .grid-span-all {
+        grid-column: 1 / -1;
+      }
+
       .stack {
         display: grid;
         gap: 0.8rem;
@@ -585,8 +594,13 @@ function renderBaseStyleBlock(): string {
 
       @media (max-width: 900px) {
         .grid-two,
-        .grid-three {
+        .grid-three,
+        .grid-node-health-focus {
           grid-template-columns: 1fr;
+        }
+
+        .grid-span-all {
+          grid-column: auto;
         }
       }
   `;

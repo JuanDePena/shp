@@ -77,6 +77,25 @@ const desiredStateTabIds = [
 
 type DesiredStateTabId = (typeof desiredStateTabIds)[number];
 type NodeWorkspaceTabId = "nodes-health" | "nodes-spec";
+const tenantWorkspaceTabIds = ["tenants-summary", "tenants-spec", "tenants-activity"] as const;
+const zoneWorkspaceTabIds = ["zones-summary", "zones-spec", "zones-activity"] as const;
+const appWorkspaceTabIds = ["apps-summary", "apps-spec", "apps-activity"] as const;
+const databaseWorkspaceTabIds = [
+  "databases-summary",
+  "databases-spec",
+  "databases-activity"
+] as const;
+const backupPolicyWorkspaceTabIds = [
+  "backup-policies-summary",
+  "backup-policies-spec",
+  "backup-policies-activity"
+] as const;
+
+type TenantWorkspaceTabId = (typeof tenantWorkspaceTabIds)[number];
+type ZoneWorkspaceTabId = (typeof zoneWorkspaceTabIds)[number];
+type AppWorkspaceTabId = (typeof appWorkspaceTabIds)[number];
+type DatabaseWorkspaceTabId = (typeof databaseWorkspaceTabIds)[number];
+type BackupPolicyWorkspaceTabId = (typeof backupPolicyWorkspaceTabIds)[number];
 
 interface DashboardData {
   currentUser: AuthenticatedUserSummary;
@@ -380,6 +399,9 @@ interface WebCopy {
   noJobs: string;
   noBackups: string;
   tabCreate: string;
+  tabSummary: string;
+  tabSpec: string;
+  tabActivity: string;
   tabTenants: string;
   tabNodes: string;
   tabZones: string;
@@ -685,6 +707,9 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     noJobs: "No jobs.",
     noBackups: "No backup runs.",
     tabCreate: "Create",
+    tabSummary: "Summary",
+    tabSpec: "Spec",
+    tabActivity: "Activity",
     tabTenants: "Tenants",
     tabNodes: "Nodes",
     tabZones: "DNS zones",
@@ -988,6 +1013,9 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     noJobs: "No hay jobs.",
     noBackups: "No hay ejecuciones de backup.",
     tabCreate: "Crear",
+    tabSummary: "Resumen",
+    tabSpec: "Especificación",
+    tabActivity: "Actividad",
     tabTenants: "Tenants",
     tabNodes: "Nodos",
     tabZones: "Zonas DNS",
@@ -1155,6 +1183,14 @@ function normalizeNodeWorkspaceTab(value: string | null | undefined): NodeWorksp
   return value === "nodes-spec" ? "nodes-spec" : "nodes-health";
 }
 
+function normalizeWorkspaceTab<T extends readonly string[]>(
+  value: string | null | undefined,
+  candidates: T,
+  fallback: T[number]
+): T[number] {
+  return (candidates.find((candidate) => candidate === value) ?? fallback) as T[number];
+}
+
 function resolveDesiredStateTabForView(
   view: DashboardView,
   tab: DesiredStateTabId
@@ -1222,9 +1258,7 @@ function buildDashboardViewUrl(
 
   if (view === "desired-state") {
     search.set("tab", tab ?? "desired-state-create");
-  }
-
-  if (view === "nodes" && tab) {
+  } else if (tab) {
     search.set("tab", tab);
   }
 
@@ -2454,7 +2488,7 @@ function renderDesiredStateSection(
   locale: WebLocale,
   defaultTabId: DesiredStateTabId,
   focus?: string,
-  options: { mode?: "full" | "single" } = {}
+  options: { mode?: "full" | "single" | "workspace"; workspaceTabId?: string } = {}
 ): string {
   const tenantOptions = data.desiredState.spec.tenants.map((tenant) => ({
     value: tenant.slug,
@@ -5750,6 +5784,294 @@ function renderDesiredStateSection(
     }
   ];
 
+  const createFormPanels = new Map(createTabs.map((tab) => [tab.id, tab.panelHtml] as const));
+
+  if (options.mode === "workspace") {
+    switch (defaultTabId) {
+      case "desired-state-tenants":
+        return renderObjectWorkspaceSection(
+          "section-tenants",
+          renderDataTable({
+            id: "tenants-object-table",
+            heading: copy.desiredStateInventoryTitle,
+            description: copy.desiredStateInventoryDescription,
+            columns: [
+              { label: copy.tenantColSlug, className: "mono" },
+              { label: copy.tenantColDisplayName }
+            ],
+            rows: tenantTableRows,
+            emptyMessage: copy.noTenants,
+            filterPlaceholder: copy.dataFilterPlaceholder,
+            rowsPerPageLabel: copy.rowsPerPage,
+            showingLabel: copy.showing,
+            ofLabel: copy.of,
+            recordsLabel: copy.records,
+            defaultPageSize: 10
+          }),
+          [
+            {
+              id: "tenants-summary",
+              label: copy.tabSummary,
+              href: buildDashboardViewUrl("tenants", "tenants-summary", focus),
+              panelHtml:
+                tenantDetailPanel ||
+                `<article class="panel"><p class="empty">${escapeHtml(copy.noTenants)}</p></article>`
+            },
+            {
+              id: "tenants-spec",
+              label: copy.tabSpec,
+              href: buildDashboardViewUrl("tenants", "tenants-spec", focus),
+              panelHtml:
+                tenantEditorPanel ??
+                createFormPanels.get("create-tenant-form") ??
+                `<article class="panel"><p class="empty">${escapeHtml(copy.noTenants)}</p></article>`
+            },
+            {
+              id: "tenants-activity",
+              label: copy.tabActivity,
+              href: buildDashboardViewUrl("tenants", "tenants-activity", focus),
+              panelHtml: selectedTenant
+                ? renderResourceActivityStack(selectedTenantJobs, selectedTenantAuditEvents)
+                : `<article class="panel"><p class="empty">${escapeHtml(copy.noTenants)}</p></article>`
+            }
+          ],
+          options.workspaceTabId ?? "tenants-summary"
+        );
+      case "desired-state-zones":
+        return renderObjectWorkspaceSection(
+          "section-zones",
+          renderDataTable({
+            id: "zones-object-table",
+            heading: copy.desiredStateInventoryTitle,
+            description: copy.desiredStateInventoryDescription,
+            columns: [
+              { label: copy.zoneColZone, className: "mono" },
+              { label: copy.zoneColTenant },
+              { label: copy.zoneColPrimaryNode, className: "mono" },
+              { label: copy.zoneColRecordCount }
+            ],
+            rows: zoneTableRows,
+            emptyMessage: copy.noZones,
+            filterPlaceholder: copy.dataFilterPlaceholder,
+            rowsPerPageLabel: copy.rowsPerPage,
+            showingLabel: copy.showing,
+            ofLabel: copy.of,
+            recordsLabel: copy.records,
+            defaultPageSize: 10
+          }),
+          [
+            {
+              id: "zones-summary",
+              label: copy.tabSummary,
+              href: buildDashboardViewUrl("zones", "zones-summary", focus),
+              panelHtml:
+                zoneDetailPanel ||
+                `<article class="panel"><p class="empty">${escapeHtml(copy.noZones)}</p></article>`
+            },
+            {
+              id: "zones-spec",
+              label: copy.tabSpec,
+              href: buildDashboardViewUrl("zones", "zones-spec", focus),
+              panelHtml:
+                zoneEditorPanel ??
+                createFormPanels.get("create-zone-form") ??
+                `<article class="panel"><p class="empty">${escapeHtml(copy.noZones)}</p></article>`
+            },
+            {
+              id: "zones-activity",
+              label: copy.tabActivity,
+              href: buildDashboardViewUrl("zones", "zones-activity", focus),
+              panelHtml: selectedZone
+                ? renderResourceActivityStack(selectedZoneJobs, selectedZoneAuditEvents)
+                : `<article class="panel"><p class="empty">${escapeHtml(copy.noZones)}</p></article>`
+            }
+          ],
+          options.workspaceTabId ?? "zones-summary"
+        );
+      case "desired-state-apps":
+        return renderObjectWorkspaceSection(
+          "section-apps",
+          renderDataTable({
+            id: "apps-object-table",
+            heading: copy.desiredStateInventoryTitle,
+            description: copy.desiredStateInventoryDescription,
+            columns: [
+              { label: copy.appColSlug, className: "mono" },
+              { label: copy.appColTenant },
+              { label: copy.appColDomain },
+              { label: copy.appColMode },
+              { label: copy.appColNodes, className: "mono" }
+            ],
+            rows: appTableRows,
+            emptyMessage: copy.noApps,
+            filterPlaceholder: copy.dataFilterPlaceholder,
+            rowsPerPageLabel: copy.rowsPerPage,
+            showingLabel: copy.showing,
+            ofLabel: copy.of,
+            recordsLabel: copy.records,
+            defaultPageSize: 10
+          }),
+          [
+            {
+              id: "apps-summary",
+              label: copy.tabSummary,
+              href: buildDashboardViewUrl("apps", "apps-summary", focus),
+              panelHtml:
+                appDetailPanel ||
+                `<article class="panel"><p class="empty">${escapeHtml(copy.noApps)}</p></article>`
+            },
+            {
+              id: "apps-spec",
+              label: copy.tabSpec,
+              href: buildDashboardViewUrl("apps", "apps-spec", focus),
+              panelHtml:
+                appEditorPanel ??
+                createFormPanels.get("create-app-form") ??
+                `<article class="panel"><p class="empty">${escapeHtml(copy.noApps)}</p></article>`
+            },
+            {
+              id: "apps-activity",
+              label: copy.tabActivity,
+              href: buildDashboardViewUrl("apps", "apps-activity", focus),
+              panelHtml: selectedApp
+                ? renderResourceActivityStack(selectedAppJobs, selectedAppAuditEvents)
+                : `<article class="panel"><p class="empty">${escapeHtml(copy.noApps)}</p></article>`
+            }
+          ],
+          options.workspaceTabId ?? "apps-summary"
+        );
+      case "desired-state-databases":
+        return renderObjectWorkspaceSection(
+          "section-databases",
+          renderDataTable({
+            id: "databases-object-table",
+            heading: copy.desiredStateInventoryTitle,
+            description: copy.desiredStateInventoryDescription,
+            columns: [
+              { label: copy.databaseColApp, className: "mono" },
+              { label: copy.databaseColEngine },
+              { label: copy.databaseColDatabase, className: "mono" },
+              { label: copy.databaseColUser, className: "mono" },
+              { label: copy.databaseColNodes, className: "mono" },
+              { label: copy.databaseColMigration }
+            ],
+            rows: databaseTableRows,
+            emptyMessage: copy.noDatabases,
+            filterPlaceholder: copy.dataFilterPlaceholder,
+            rowsPerPageLabel: copy.rowsPerPage,
+            showingLabel: copy.showing,
+            ofLabel: copy.of,
+            recordsLabel: copy.records,
+            defaultPageSize: 10
+          }),
+          [
+            {
+              id: "databases-summary",
+              label: copy.tabSummary,
+              href: buildDashboardViewUrl("databases", "databases-summary", focus),
+              panelHtml:
+                databaseDetailPanel ||
+                `<article class="panel"><p class="empty">${escapeHtml(copy.noDatabases)}</p></article>`
+            },
+            {
+              id: "databases-spec",
+              label: copy.tabSpec,
+              href: buildDashboardViewUrl("databases", "databases-spec", focus),
+              panelHtml:
+                databaseEditorPanel ??
+                createFormPanels.get("create-database-form") ??
+                `<article class="panel"><p class="empty">${escapeHtml(copy.noDatabases)}</p></article>`
+            },
+            {
+              id: "databases-activity",
+              label: copy.tabActivity,
+              href: buildDashboardViewUrl("databases", "databases-activity", focus),
+              panelHtml: selectedDatabase
+                ? renderResourceActivityStack(selectedDatabaseJobs, selectedDatabaseAuditEvents)
+                : `<article class="panel"><p class="empty">${escapeHtml(copy.noDatabases)}</p></article>`
+            }
+          ],
+          options.workspaceTabId ?? "databases-summary"
+        );
+      case "desired-state-backups":
+        return renderObjectWorkspaceSection(
+          "section-backup-policies",
+          renderDataTable({
+            id: "backup-policies-object-table",
+            heading: copy.desiredStateInventoryTitle,
+            description: copy.desiredStateInventoryDescription,
+            columns: [
+              { label: copy.backupPolicyColSlug, className: "mono" },
+              { label: copy.backupPolicyColTenant },
+              { label: copy.backupPolicyColTargetNode, className: "mono" },
+              { label: copy.backupPolicyColSchedule, className: "mono" },
+              { label: copy.backupPolicyColRetention }
+            ],
+            rows: backupTableRows,
+            emptyMessage: copy.noBackupPolicies,
+            filterPlaceholder: copy.dataFilterPlaceholder,
+            rowsPerPageLabel: copy.rowsPerPage,
+            showingLabel: copy.showing,
+            ofLabel: copy.of,
+            recordsLabel: copy.records,
+            defaultPageSize: 10
+          }),
+          [
+            {
+              id: "backup-policies-summary",
+              label: copy.tabSummary,
+              href: buildDashboardViewUrl("backup-policies", "backup-policies-summary", focus),
+              panelHtml:
+                backupDetailPanel ||
+                `<article class="panel"><p class="empty">${escapeHtml(copy.noBackupPolicies)}</p></article>`
+            },
+            {
+              id: "backup-policies-spec",
+              label: copy.tabSpec,
+              href: buildDashboardViewUrl("backup-policies", "backup-policies-spec", focus),
+              panelHtml:
+                backupEditorPanel ??
+                createFormPanels.get("create-backup-form") ??
+                `<article class="panel"><p class="empty">${escapeHtml(copy.noBackupPolicies)}</p></article>`
+            },
+            {
+              id: "backup-policies-activity",
+              label: copy.tabActivity,
+              href: buildDashboardViewUrl("backup-policies", "backup-policies-activity", focus),
+              panelHtml: selectedBackupPolicy
+                ? `<div class="stack">
+                    ${renderRelatedPanel(
+                      copy.backupsTitle,
+                      copy.backupsDescription,
+                      selectedBackupRuns.slice(0, 8).map((run) => ({
+                        title: `<a class="detail-link" href="${escapeHtml(
+                          buildDashboardViewUrl("backups", undefined, run.runId)
+                        )}">${escapeHtml(run.runId)}</a>`,
+                        meta: escapeHtml(
+                          [run.policySlug, run.nodeId, formatDate(run.startedAt, locale)].join(" · ")
+                        ),
+                        summary: escapeHtml(run.summary),
+                        tone:
+                          run.status === "failed"
+                            ? ("danger" as const)
+                            : run.status === "succeeded"
+                              ? ("success" as const)
+                              : ("default" as const)
+                      })),
+                      copy.noBackups
+                    )}
+                    ${renderAuditPanel(copy, locale, selectedBackupAuditEvents)}
+                  </div>`
+                : `<article class="panel"><p class="empty">${escapeHtml(copy.noBackupPolicies)}</p></article>`
+            }
+          ],
+          options.workspaceTabId ?? "backup-policies-summary"
+        );
+      default:
+        break;
+    }
+  }
+
   if (options.mode === "single") {
     const selectedTab =
       tabs.find((tab) => tab.id === defaultTabId) ??
@@ -5782,6 +6104,38 @@ function renderSingleDesiredStateObjectView(
   });
 }
 
+function renderDesiredStateObjectWorkspaceView(
+  data: DashboardData,
+  copy: WebCopy,
+  locale: WebLocale,
+  defaultTabId: DesiredStateTabId,
+  focus: string | undefined,
+  workspaceTabId: string
+): string {
+  return renderDesiredStateSection(data, copy, locale, defaultTabId, focus, {
+    mode: "workspace",
+    workspaceTabId
+  });
+}
+
+function renderObjectWorkspaceSection(
+  id: string,
+  tableHtml: string,
+  tabs: TabItem[],
+  defaultTabId: string
+): string {
+  return `<section id="${escapeHtml(id)}" class="panel section-panel">
+    <div class="stack">
+      ${tableHtml}
+      ${renderTabs({
+        id: `${id}-tabs`,
+        tabs,
+        defaultTabId
+      })}
+    </div>
+  </section>`;
+}
+
 function renderDashboard(
   data: DashboardData,
   locale: WebLocale,
@@ -5795,6 +6149,31 @@ function renderDashboard(
   const currentUrl = new URL(`http://localhost${currentPath}`);
   const resolvedDesiredStateTab = resolveDesiredStateTabForView(view, desiredStateTab);
   const nodeWorkspaceTab = normalizeNodeWorkspaceTab(currentUrl.searchParams.get("tab"));
+  const tenantWorkspaceTab = normalizeWorkspaceTab(
+    currentUrl.searchParams.get("tab"),
+    tenantWorkspaceTabIds,
+    "tenants-summary"
+  );
+  const zoneWorkspaceTab = normalizeWorkspaceTab(
+    currentUrl.searchParams.get("tab"),
+    zoneWorkspaceTabIds,
+    "zones-summary"
+  );
+  const appWorkspaceTab = normalizeWorkspaceTab(
+    currentUrl.searchParams.get("tab"),
+    appWorkspaceTabIds,
+    "apps-summary"
+  );
+  const databaseWorkspaceTab = normalizeWorkspaceTab(
+    currentUrl.searchParams.get("tab"),
+    databaseWorkspaceTabIds,
+    "databases-summary"
+  );
+  const backupPolicyWorkspaceTab = normalizeWorkspaceTab(
+    currentUrl.searchParams.get("tab"),
+    backupPolicyWorkspaceTabIds,
+    "backup-policies-summary"
+  );
   const jobStatusFilter = normalizeFilterValue(currentUrl.searchParams.get("jobStatus"));
   const jobKindFilter = normalizeFilterValue(currentUrl.searchParams.get("jobKind"));
   const jobNodeFilter = normalizeFilterValue(currentUrl.searchParams.get("jobNode"));
@@ -8321,13 +8700,13 @@ function renderDashboard(
     resolvedDesiredStateTab,
     focus
   );
-
-  const tenantsSection = renderSingleDesiredStateObjectView(
+  const tenantsSection = renderDesiredStateObjectWorkspaceView(
     data,
     copy,
     locale,
     "desired-state-tenants",
-    focus
+    focus,
+    tenantWorkspaceTab
   );
 
   const nodesSection = `<section id="section-nodes" class="panel section-panel">
@@ -8357,36 +8736,40 @@ function renderDashboard(
     })}
   </section>`;
 
-  const zonesSection = renderSingleDesiredStateObjectView(
+  const zonesSection = renderDesiredStateObjectWorkspaceView(
     data,
     copy,
     locale,
     "desired-state-zones",
-    focus
+    focus,
+    zoneWorkspaceTab
   );
 
-  const appsSection = renderSingleDesiredStateObjectView(
+  const appsSection = renderDesiredStateObjectWorkspaceView(
     data,
     copy,
     locale,
     "desired-state-apps",
-    focus
+    focus,
+    appWorkspaceTab
   );
 
-  const databasesSection = renderSingleDesiredStateObjectView(
+  const databasesSection = renderDesiredStateObjectWorkspaceView(
     data,
     copy,
     locale,
     "desired-state-databases",
-    focus
+    focus,
+    databaseWorkspaceTab
   );
 
-  const backupPoliciesSection = renderSingleDesiredStateObjectView(
+  const backupPoliciesSection = renderDesiredStateObjectWorkspaceView(
     data,
     copy,
     locale,
     "desired-state-backups",
-    focus
+    focus,
+    backupPolicyWorkspaceTab
   );
 
   const body = (() => {

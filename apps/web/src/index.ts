@@ -55,6 +55,7 @@ type DashboardView =
   | "tenants"
   | "nodes"
   | "zones"
+  | "proxies"
   | "apps"
   | "databases"
   | "backup-policies"
@@ -79,6 +80,7 @@ type DesiredStateTabId = (typeof desiredStateTabIds)[number];
 type NodeWorkspaceTabId = "nodes-health" | "nodes-spec";
 const tenantWorkspaceTabIds = ["tenants-summary", "tenants-spec", "tenants-activity"] as const;
 const zoneWorkspaceTabIds = ["zones-summary", "zones-spec", "zones-activity"] as const;
+const proxyWorkspaceTabIds = ["proxies-summary", "proxies-spec", "proxies-activity"] as const;
 const appWorkspaceTabIds = ["apps-summary", "apps-spec", "apps-activity"] as const;
 const databaseWorkspaceTabIds = [
   "databases-summary",
@@ -93,6 +95,7 @@ const backupPolicyWorkspaceTabIds = [
 
 type TenantWorkspaceTabId = (typeof tenantWorkspaceTabIds)[number];
 type ZoneWorkspaceTabId = (typeof zoneWorkspaceTabIds)[number];
+type ProxyWorkspaceTabId = (typeof proxyWorkspaceTabIds)[number];
 type AppWorkspaceTabId = (typeof appWorkspaceTabIds)[number];
 type DatabaseWorkspaceTabId = (typeof databaseWorkspaceTabIds)[number];
 type BackupPolicyWorkspaceTabId = (typeof backupPolicyWorkspaceTabIds)[number];
@@ -141,12 +144,14 @@ interface WebCopy {
   navTenants: string;
   navNodes: string;
   navZones: string;
+  navProxies: string;
   navApps: string;
   navDatabases: string;
   navBackupPolicies: string;
   tenantWorkspaceDescription: string;
   nodeWorkspaceDescription: string;
   zoneWorkspaceDescription: string;
+  proxyWorkspaceDescription: string;
   appWorkspaceDescription: string;
   databaseWorkspaceDescription: string;
   backupWorkspaceDescription: string;
@@ -438,12 +443,14 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     navTenants: "Tenants",
     navNodes: "Nodes",
     navZones: "Zones",
+    navProxies: "Proxies",
     navApps: "Apps",
     navDatabases: "Databases",
     navBackupPolicies: "Backup policies",
     tenantWorkspaceDescription: "Tenant scope, related resources and recent platform activity.",
     nodeWorkspaceDescription: "Health, desired topology and operator actions by node.",
     zoneWorkspaceDescription: "DNS zones, records, dispatch state and related drift.",
+    proxyWorkspaceDescription: "Virtual hosts, proxy routing and operator-facing ingress per app.",
     appWorkspaceDescription: "Runtime topology, proxy operations and app-linked resources.",
     databaseWorkspaceDescription: "Database topology, reconcile posture and related operations.",
     backupWorkspaceDescription: "Policy definition, retention and coverage before backup runs.",
@@ -744,12 +751,14 @@ const copyByLocale: Record<WebLocale, WebCopy> = {
     navTenants: "Tenants",
     navNodes: "Nodos",
     navZones: "Zonas",
+    navProxies: "Proxies",
     navApps: "Apps",
     navDatabases: "Bases de datos",
     navBackupPolicies: "Políticas de backup",
     tenantWorkspaceDescription: "Alcance del tenant, recursos relacionados y actividad reciente de plataforma.",
     nodeWorkspaceDescription: "Salud, topología deseada y acciones operativas por nodo.",
     zoneWorkspaceDescription: "Zonas DNS, registros, estado de dispatch y drift relacionado.",
+    proxyWorkspaceDescription: "Virtual hosts, enrutamiento proxy e ingress operator-facing por app.",
     appWorkspaceDescription: "Topología runtime, operaciones de proxy y recursos vinculados a la app.",
     databaseWorkspaceDescription: "Topología de base de datos, estado de reconcile y operaciones relacionadas.",
     backupWorkspaceDescription: "Definición de políticas, retención y cobertura antes de las ejecuciones.",
@@ -1160,6 +1169,7 @@ function normalizeDashboardView(value: string | null | undefined): DashboardView
     case "tenants":
     case "nodes":
     case "zones":
+    case "proxies":
     case "apps":
     case "databases":
     case "backup-policies":
@@ -1202,6 +1212,8 @@ function resolveDesiredStateTabForView(
       return "desired-state-nodes";
     case "zones":
       return "desired-state-zones";
+    case "proxies":
+      return "desired-state-apps";
     case "apps":
       return "desired-state-apps";
     case "databases":
@@ -1221,6 +1233,8 @@ function getObjectViewLabel(copy: WebCopy, view: DashboardView): string | undefi
       return copy.navNodes;
     case "zones":
       return copy.navZones;
+    case "proxies":
+      return copy.navProxies;
     case "apps":
       return copy.navApps;
     case "databases":
@@ -1347,6 +1361,8 @@ function getDashboardSubheading(copy: WebCopy, view: DashboardView): string {
       return copy.nodeWorkspaceDescription;
     case "zones":
       return copy.zoneWorkspaceDescription;
+    case "proxies":
+      return copy.proxyWorkspaceDescription;
     case "apps":
       return copy.appWorkspaceDescription;
     case "databases":
@@ -1950,7 +1966,7 @@ function parseDriftResourceReference(entry: ResourceDriftSummary): {
   if (entry.resourceKind === "site" && entry.resourceKey.startsWith("app:")) {
     const [, appSlug] = entry.resourceKey.split(":", 3);
     return {
-      editorHref: buildDashboardViewUrl("desired-state", "desired-state-apps", appSlug),
+      editorHref: buildDashboardViewUrl("proxies", "proxies-spec", appSlug),
       action: {
         path: "/actions/app-render-proxy",
         fields: { slug: appSlug },
@@ -2463,7 +2479,7 @@ function resolveResourceKeyTarget(resourceKey: string): {
     }
 
     return {
-      desiredStateHref: buildDashboardViewUrl("desired-state", "desired-state-apps", slug),
+      desiredStateHref: buildDashboardViewUrl("proxies", "proxies-spec", slug),
       driftHref: buildDashboardViewUrl("resource-drift", undefined, resourceKey)
     };
   }
@@ -2527,7 +2543,11 @@ function renderDesiredStateSection(
   locale: WebLocale,
   defaultTabId: DesiredStateTabId,
   focus?: string,
-  options: { mode?: "full" | "single" | "workspace"; workspaceTabId?: string } = {}
+  options: {
+    mode?: "full" | "single" | "workspace";
+    workspaceTabId?: string;
+    workspaceKind?: "apps" | "proxies";
+  } = {}
 ): string {
   const tenantOptions = data.desiredState.spec.tenants.map((tenant) => ({
     value: tenant.slug,
@@ -2725,6 +2745,32 @@ function renderDesiredStateSection(
       app.mode,
       app.primaryNodeId,
       app.standbyNodeId ?? ""
+    ].join(" ").toLowerCase()
+  }));
+  const proxyTableRows: DataTableRow[] = data.desiredState.spec.apps.map((app) => ({
+    cells: [
+      renderFocusLink(
+        app.canonicalDomain,
+        buildDashboardViewUrl("proxies", undefined, app.slug),
+        selectedApp?.slug === app.slug,
+        copy.selectedStateLabel
+      ),
+      escapeHtml(app.slug),
+      escapeHtml(app.aliases.length > 0 ? app.aliases.join(", ") : copy.none),
+      `<span class="mono">${escapeHtml(String(app.backendPort))}</span>`,
+      `<span class="mono">${escapeHtml(
+        app.standbyNodeId ? `${app.primaryNodeId} -> ${app.standbyNodeId}` : app.primaryNodeId
+      )}</span>`
+    ],
+    searchText: [
+      app.slug,
+      app.canonicalDomain,
+      app.aliases.join(" "),
+      String(app.backendPort),
+      app.primaryNodeId,
+      app.standbyNodeId ?? "",
+      app.zoneName,
+      app.tenantSlug
     ].join(" ").toLowerCase()
   }));
   const databaseTableRows: DataTableRow[] = data.desiredState.spec.databases.map((database) => ({
@@ -4475,6 +4521,177 @@ function renderDesiredStateSection(
       </article>`
     : "";
 
+  const proxyDetailPanel = selectedApp
+    ? `<article class="panel detail-shell">
+        <div class="section-head">
+          <div>
+            <h3>${escapeHtml(copy.selectedResourceTitle)}</h3>
+            <p class="muted section-description">${escapeHtml(copy.selectedResourceDescription)}</p>
+          </div>
+        </div>
+        <div>
+          <h3>${escapeHtml(selectedApp.canonicalDomain)}</h3>
+          <p class="muted">${escapeHtml(selectedApp.slug)}</p>
+        </div>
+        ${renderDetailGrid([
+          { label: copy.appColSlug, value: `<span class="mono">${escapeHtml(selectedApp.slug)}</span>` },
+          { label: copy.appColTenant, value: escapeHtml(selectedApp.tenantSlug) },
+          { label: copy.zoneColZone, value: escapeHtml(selectedApp.zoneName) },
+          {
+            label: copy.backendPortLabel,
+            value: `<span class="mono">${escapeHtml(String(selectedApp.backendPort))}</span>`
+          },
+          {
+            label: copy.aliasesLabel,
+            value: escapeHtml(
+              selectedApp.aliases.length > 0 ? selectedApp.aliases.join(", ") : copy.none
+            )
+          },
+          {
+            label: copy.appColNodes,
+            value: `<span class="mono">${escapeHtml(
+              selectedApp.standbyNodeId
+                ? `${selectedApp.primaryNodeId} -> ${selectedApp.standbyNodeId}`
+                : selectedApp.primaryNodeId
+            )}</span>`
+          }
+        ])}
+        <div class="grid grid-two">
+          <article class="panel">
+            <h3>${escapeHtml(copy.appRuntimeTitle)}</h3>
+            ${renderDetailGrid([
+              { label: copy.appColDomain, value: escapeHtml(selectedApp.canonicalDomain) },
+              {
+                label: copy.aliasesLabel,
+                value: escapeHtml(
+                  selectedApp.aliases.length > 0 ? selectedApp.aliases.join(", ") : copy.none
+                )
+              },
+              {
+                label: copy.appColMode,
+                value: renderPill(
+                  selectedApp.mode,
+                  selectedApp.mode === "active-active" ? "success" : "muted"
+                )
+              },
+              {
+                label: copy.runtimeImageLabel,
+                value: `<span class="mono">${escapeHtml(selectedApp.runtimeImage)}</span>`
+              }
+            ])}
+          </article>
+          <article class="panel">
+            <h3>${escapeHtml(copy.detailActionsTitle)}</h3>
+            ${renderDetailGrid([
+              {
+                label: copy.dispatchRecommended,
+                value:
+                  selectedAppProxyDrifts.length > 0
+                    ? renderPill(
+                        selectedAppProxyDrifts.some((entry) => entry.dispatchRecommended)
+                          ? copy.yesLabel
+                          : copy.noLabel,
+                        selectedAppProxyDrifts.some((entry) => entry.dispatchRecommended)
+                          ? "danger"
+                          : "success"
+                      )
+                    : renderPill(copy.none, "muted")
+              },
+              {
+                label: copy.latestSuccessLabel,
+                value: selectedAppLatestSuccess
+                  ? `<a class="detail-link mono" href="${escapeHtml(
+                      buildDashboardViewUrl("jobs", undefined, selectedAppLatestSuccess.jobId)
+                    )}">${escapeHtml(selectedAppLatestSuccess.jobId)}</a>`
+                  : renderPill(copy.none, "muted")
+              },
+              {
+                label: copy.latestFailureLabel,
+                value: selectedAppLatestFailure
+                  ? `<a class="detail-link mono" href="${escapeHtml(
+                      buildDashboardViewUrl("jobs", undefined, selectedAppLatestFailure.jobId)
+                    )}">${escapeHtml(selectedAppLatestFailure.jobId)}</a>`
+                  : renderPill(copy.none, "muted")
+              },
+              {
+                label: copy.linkedResource,
+                value: `<a class="detail-link mono" href="${escapeHtml(
+                  buildDashboardViewUrl(
+                    "resource-drift",
+                    undefined,
+                    `app:${selectedApp.slug}:proxy:${selectedApp.primaryNodeId}`
+                  )
+                )}">${escapeHtml(`app:${selectedApp.slug}:proxy:${selectedApp.primaryNodeId}`)}</a>`
+              }
+            ])}
+            <div class="toolbar">
+              ${renderActionForm(
+                "/actions/app-render-proxy",
+                { slug: selectedApp.slug },
+                copy.actionDispatchProxyRender,
+                {
+                  confirmMessage: `Dispatch proxy.render for app ${selectedApp.slug}? This will queue ${
+                    selectedApp.standbyNodeId ? 2 : 1
+                  } proxy.render job(s).`
+                }
+              )}
+            </div>
+            <div class="toolbar">
+              <a class="button-link secondary" href="${escapeHtml(
+                buildDashboardViewUrl(
+                  "resource-drift",
+                  undefined,
+                  `app:${selectedApp.slug}:proxy:${selectedApp.primaryNodeId}`
+                )
+              )}">${escapeHtml(copy.openDriftView)}</a>
+            </div>
+          </article>
+        </div>
+        ${renderComparisonTable(
+          copy,
+          copy.desiredAppliedTitle,
+          copy.desiredAppliedDescription,
+          appComparisonRows
+        )}
+        ${renderRelatedPanel(
+          copy.fieldDeltaTitle,
+          copy.fieldDeltaDescription,
+          createComparisonDeltaItems(copy, appComparisonRows),
+          copy.noFieldDeltas
+        )}
+        ${renderRelatedPanel(
+          copy.plannedChangesTitle,
+          copy.plannedChangesDescription,
+          selectedAppActionPreviewItems,
+          copy.noRelatedRecords
+        )}
+        ${renderRelatedPanel(
+          copy.relatedResourcesTitle,
+          copy.relatedResourcesDescription,
+          [
+            ...selectedAppDatabases.map((database) => ({
+              title: `<a class="detail-link" href="${escapeHtml(
+                buildDashboardViewUrl("databases", undefined, database.appSlug)
+              )}">${escapeHtml(database.databaseName)}</a>`,
+              meta: escapeHtml(database.engine),
+              summary: escapeHtml(database.databaseUser),
+              tone: "default" as const
+            })),
+            ...selectedAppBackupPolicies.slice(0, 3).map((policy) => ({
+              title: `<a class="detail-link" href="${escapeHtml(
+                buildDashboardViewUrl("backup-policies", undefined, policy.policySlug)
+              )}">${escapeHtml(policy.policySlug)}</a>`,
+              meta: escapeHtml(policy.targetNodeId),
+              summary: escapeHtml(policy.schedule),
+              tone: "default" as const
+            }))
+          ],
+          copy.noRelatedRecords
+        )}
+        ${renderResourceActivityStack(selectedAppJobs, selectedAppAuditEvents)}
+      </article>`
+    : "";
+
   const appDetailPanel = selectedApp
     ? `<article class="panel detail-shell">
         <div class="section-head">
@@ -4920,6 +5137,8 @@ function renderDesiredStateSection(
         </article>
       </article>`
     : "";
+
+  const proxyEditorPanel = appEditorPanel;
 
   const databaseDetailPanel = selectedDatabase
     ? `<article class="panel detail-shell">
@@ -5928,6 +6147,60 @@ function renderDesiredStateSection(
           options.workspaceTabId ?? "zones-summary"
         );
       case "desired-state-apps":
+        if (options.workspaceKind === "proxies") {
+          return renderObjectWorkspaceSection(
+            "section-proxies",
+            renderDataTable({
+              id: "proxies-object-table",
+              heading: copy.desiredStateInventoryTitle,
+              description: copy.desiredStateInventoryDescription,
+              columns: [
+                { label: copy.appColDomain },
+                { label: copy.appColSlug, className: "mono" },
+                { label: copy.aliasesLabel },
+                { label: copy.backendPortLabel, className: "mono" },
+                { label: copy.appColNodes, className: "mono" }
+              ],
+              rows: proxyTableRows,
+              emptyMessage: copy.noApps,
+              filterPlaceholder: copy.dataFilterPlaceholder,
+              rowsPerPageLabel: copy.rowsPerPage,
+              showingLabel: copy.showing,
+              ofLabel: copy.of,
+              recordsLabel: copy.records,
+              defaultPageSize: 10
+            }),
+            [
+              {
+                id: "proxies-summary",
+                label: copy.tabSummary,
+                href: buildDashboardViewUrl("proxies", "proxies-summary", focus),
+                panelHtml:
+                  proxyDetailPanel ||
+                  `<article class="panel"><p class="empty">${escapeHtml(copy.noApps)}</p></article>`
+              },
+              {
+                id: "proxies-spec",
+                label: copy.tabSpec,
+                href: buildDashboardViewUrl("proxies", "proxies-spec", focus),
+                panelHtml:
+                  proxyEditorPanel ??
+                  createFormPanels.get("create-app-form") ??
+                  `<article class="panel"><p class="empty">${escapeHtml(copy.noApps)}</p></article>`
+              },
+              {
+                id: "proxies-activity",
+                label: copy.tabActivity,
+                href: buildDashboardViewUrl("proxies", "proxies-activity", focus),
+                panelHtml: selectedApp
+                  ? renderResourceActivityStack(selectedAppJobs, selectedAppAuditEvents)
+                  : `<article class="panel"><p class="empty">${escapeHtml(copy.noApps)}</p></article>`
+              }
+            ],
+            options.workspaceTabId ?? "proxies-summary"
+          );
+        }
+
         return renderObjectWorkspaceSection(
           "section-apps",
           renderDataTable({
@@ -6149,11 +6422,13 @@ function renderDesiredStateObjectWorkspaceView(
   locale: WebLocale,
   defaultTabId: DesiredStateTabId,
   focus: string | undefined,
-  workspaceTabId: string
+  workspaceTabId: string,
+  workspaceKind?: "apps" | "proxies"
 ): string {
   return renderDesiredStateSection(data, copy, locale, defaultTabId, focus, {
     mode: "workspace",
-    workspaceTabId
+    workspaceTabId,
+    workspaceKind
   });
 }
 
@@ -6197,6 +6472,11 @@ function renderDashboard(
     currentUrl.searchParams.get("tab"),
     zoneWorkspaceTabIds,
     "zones-summary"
+  );
+  const proxyWorkspaceTab = normalizeWorkspaceTab(
+    currentUrl.searchParams.get("tab"),
+    proxyWorkspaceTabIds,
+    "proxies-summary"
   );
   const appWorkspaceTab = normalizeWorkspaceTab(
     currentUrl.searchParams.get("tab"),
@@ -7133,6 +7413,13 @@ function renderDashboard(
           active:
             view === "zones" ||
             (view === "desired-state" && resolvedDesiredStateTab === "desired-state-zones")
+        },
+        {
+          id: "proxies",
+          label: copy.navProxies,
+          href: buildDashboardViewUrl("proxies", undefined, focus),
+          badge: String(data.desiredState.spec.apps.length),
+          active: view === "proxies"
         },
         {
           id: "apps",
@@ -8784,13 +9071,24 @@ function renderDashboard(
     zoneWorkspaceTab
   );
 
+  const proxiesSection = renderDesiredStateObjectWorkspaceView(
+    data,
+    copy,
+    locale,
+    "desired-state-apps",
+    focus,
+    proxyWorkspaceTab,
+    "proxies"
+  );
+
   const appsSection = renderDesiredStateObjectWorkspaceView(
     data,
     copy,
     locale,
     "desired-state-apps",
     focus,
-    appWorkspaceTab
+    appWorkspaceTab,
+    "apps"
   );
 
   const databasesSection = renderDesiredStateObjectWorkspaceView(
@@ -8819,6 +9117,8 @@ function renderDashboard(
         return nodesSection;
       case "zones":
         return zonesSection;
+      case "proxies":
+        return proxiesSection;
       case "apps":
         return appsSection;
       case "databases":

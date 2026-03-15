@@ -1251,18 +1251,59 @@ function buildDashboardViewUrl(
   filters: Record<string, string | undefined> = {}
 ): string {
   const search = new URLSearchParams();
+  let targetView: DashboardView = view;
+  let targetTab = tab;
 
-  if (view !== "overview") {
-    search.set("view", view);
+  if (view === "job-history") {
+    targetView = "jobs";
+    targetTab = undefined;
+  } else if (view === "node-health") {
+    targetView = "nodes";
+    targetTab = tab ?? "nodes-health";
+  } else if (view === "desired-state") {
+    switch (tab) {
+      case "desired-state-tenants":
+        targetView = "tenants";
+        targetTab = "tenants-spec";
+        break;
+      case "desired-state-nodes":
+        targetView = "nodes";
+        targetTab = "nodes-spec";
+        break;
+      case "desired-state-zones":
+        targetView = "zones";
+        targetTab = "zones-spec";
+        break;
+      case "desired-state-apps":
+        targetView = "apps";
+        targetTab = "apps-spec";
+        break;
+      case "desired-state-databases":
+        targetView = "databases";
+        targetTab = "databases-spec";
+        break;
+      case "desired-state-backups":
+        targetView = "backup-policies";
+        targetTab = "backup-policies-spec";
+        break;
+      default:
+        targetView = view;
+        targetTab = tab ?? "desired-state-create";
+        break;
+    }
   }
 
-  if (view === "desired-state") {
-    search.set("tab", tab ?? "desired-state-create");
-  } else if (tab) {
-    search.set("tab", tab);
+  if (targetView !== "overview") {
+    search.set("view", targetView);
   }
 
-  if (view !== "overview" && focus) {
+  if (targetView === "desired-state") {
+    search.set("tab", targetTab ?? "desired-state-create");
+  } else if (targetTab) {
+    search.set("tab", targetTab);
+  }
+
+  if (targetView !== "overview" && focus) {
     search.set("focus", focus);
   }
 

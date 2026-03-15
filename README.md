@@ -120,7 +120,7 @@ Current behavior:
 - operator auth uses hashed passwords plus bearer session tokens
 - operator actions are role-gated through `platform_admin` and `platform_operator`
 - inventory import reads `/etc/spanel/inventory.apps.yaml` by default, but runtime reconciliation now works from PostgreSQL
-- bootstrap inventory can still be sourced from [`/opt/simplehost/repos/simplehost-platform-config/inventory/apps.yaml`](/opt/simplehost/repos/simplehost-platform-config/inventory/apps.yaml) and copied into `/etc/spanel/inventory.apps.yaml`
+- bootstrap inventory can still be sourced from [`/opt/simplehost/repos/simplehost-panel/bootstrap/apps.bootstrap.yaml`](/opt/simplehost/repos/simplehost-panel/bootstrap/apps.bootstrap.yaml) and copied into `/etc/spanel/inventory.apps.yaml`
 - imported inventory is normalized into tenants, nodes, zones, DNS records, apps, sites, and databases
 - desired state can be exported back out as YAML for audit or recovery
 - `proxy.render` for `active-passive` apps now dispatches to both `primary` and `secondary`
@@ -161,7 +161,7 @@ Use the `SHP` database for:
 
 Bootstrap and recovery:
 
-- import bootstrap inventory from [`/opt/simplehost/repos/simplehost-platform-config/inventory/apps.yaml`](/opt/simplehost/repos/simplehost-platform-config/inventory/apps.yaml)
+- import bootstrap inventory from [`/opt/simplehost/repos/simplehost-panel/bootstrap/apps.bootstrap.yaml`](/opt/simplehost/repos/simplehost-panel/bootstrap/apps.bootstrap.yaml)
 - keep YAML export or import support for audit and disaster recovery
 
 ## Phase 1 scope
@@ -342,8 +342,8 @@ Current packaged service artifacts:
 
 ## References
 
-- [`/opt/simplehost/repos/simplehost-platform-config/docs/AGENTS.md`](/opt/simplehost/repos/simplehost-platform-config/docs/AGENTS.md)
+- [`/opt/simplehost/repos/simplehost-documentation/AGENTS.md`](/opt/simplehost/repos/simplehost-documentation/AGENTS.md)
 - [`/opt/simplehost/repos/simplehost-manager/README.md`](/opt/simplehost/repos/simplehost-manager/README.md)
-- [`/opt/simplehost/repos/simplehost-platform-config/docs/ARQUITECTURE.md`](/opt/simplehost/repos/simplehost-platform-config/docs/ARQUITECTURE.md)
-- [`/opt/simplehost/repos/simplehost-platform-config/docs/MULTI_DOMAIN.md`](/opt/simplehost/repos/simplehost-platform-config/docs/MULTI_DOMAIN.md)
-- [`/opt/simplehost/repos/simplehost-platform-config/docs/REPO_LAYOUT.md`](/opt/simplehost/repos/simplehost-platform-config/docs/REPO_LAYOUT.md)
+- [`/opt/simplehost/repos/simplehost-documentation/ARQUITECTURE.md`](/opt/simplehost/repos/simplehost-documentation/ARQUITECTURE.md)
+- [`/opt/simplehost/repos/simplehost-documentation/MULTI_DOMAIN.md`](/opt/simplehost/repos/simplehost-documentation/MULTI_DOMAIN.md)
+- [`/opt/simplehost/repos/simplehost-documentation/REPO_LAYOUT.md`](/opt/simplehost/repos/simplehost-documentation/REPO_LAYOUT.md)

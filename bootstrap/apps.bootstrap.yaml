@@ -1,0 +1,91 @@
+nodes:
+  primary:
+    hostname: vps-3dbbfb0b.vps.ovh.ca
+    public_ipv4: 51.222.204.86
+    wireguard_address: 10.89.0.1/24
+  secondary:
+    hostname: vps-16535090.vps.ovh.ca
+    public_ipv4: 51.222.206.196
+    wireguard_address: 10.89.0.2/24
+
+platform:
+  wireguard_port: 51820
+  dns_api_bind: 127.0.0.1:8081
+  backend_port_range: 10100-19999
+  backend_port_block_size: 100
+  default_mode: active-passive
+  postgresql_apps:
+    primary_port: 5432
+    primary_node: primary
+    standby_node: secondary
+  postgresql_shp:
+    primary_port: 5433
+    primary_node: primary
+    standby_node: secondary
+    database: simplehost_panel
+    user: simplehost_panel
+  mariadb_apps:
+    primary_port: 3306
+    primary_node: primary
+    replica_node: secondary
+
+apps:
+  - slug: pyrosa-wp
+    client: pyrosa
+    zone: pyrosa.com.do
+    canonical_domain: pyrosa.com.do
+    aliases:
+      - www.pyrosa.com.do
+    backend_port: 10101
+    runtime_image: registry.example.com/pyrosa-wordpress:stable
+    database:
+      engine: mariadb
+      name: app_pyrosa_wp
+      user: app_pyrosa_wp
+    storage_root: /srv/containers/apps/pyrosa-wp
+    mode: active-passive
+
+  - slug: pyrosa-sync
+    client: pyrosa
+    zone: pyrosa.com.do
+    canonical_domain: sync.pyrosa.com.do
+    aliases: []
+    backend_port: 10102
+    runtime_image: registry.example.com/pyrosa-sync:stable
+    database:
+      engine: mariadb
+      name: app_pyrosa_sync
+      user: app_pyrosa_sync
+      pending_migration_to: postgresql
+    storage_root: /srv/containers/apps/pyrosa-sync
+    mode: active-passive
+
+  - slug: gomezrosado
+    client: gomezrosado
+    zone: gomezrosado.com.do
+    canonical_domain: gomezrosado.com.do
+    aliases:
+      - www.gomezrosado.com.do
+    backend_port: 10201
+    runtime_image: registry.example.com/gomezrosado-app:stable
+    database:
+      engine: postgresql
+      name: app_gomezrosado
+      user: app_gomezrosado
+    storage_root: /srv/containers/apps/gomezrosado
+    mode: active-passive
+
+  - slug: adudoc
+    client: adudoc
+    zone: adudoc.com
+    canonical_domain: adudoc.com
+    aliases:
+      - www.adudoc.com
+    backend_port: 10301
+    runtime_image: registry.example.com/adudoc-app:stable
+    database:
+      engine: postgresql
+      name: app_adudoc
+      user: app_adudoc
+    storage_root: /srv/containers/apps/adudoc
+    mode: active-passive

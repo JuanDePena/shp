@@ -1795,9 +1795,12 @@ function parseDriftResourceReference(entry: ResourceDriftSummary): {
 }
 
 function renderDetailGrid(
-  entries: Array<{ label: string; value: string }>
+  entries: Array<{ label: string; value: string }>,
+  options: { className?: string } = {}
 ): string {
-  return `<dl class="detail-grid">
+  const className = options.className ? ` ${escapeHtml(options.className)}` : "";
+
+  return `<dl class="detail-grid${className}">
     ${entries
       .map(
         (entry) => `<div class="detail-item">
@@ -6745,7 +6748,9 @@ function renderDashboard(
             label: copy.nodeColLastSeen,
             value: escapeHtml(formatDate(selectedNodeHealth.lastSeenAt, locale))
           }
-        ])}
+        ], {
+          className: "detail-grid-four"
+        })}
       </article>`
     : `<article class="panel"><p class="empty">${escapeHtml(copy.noNodes)}</p></article>`;
 
@@ -6788,7 +6793,7 @@ function renderDashboard(
             )}"
           />
           <div class="form-grid">
-            <label>
+            <label class="form-field-span-full">
               <span>${escapeHtml(codeServerCopy.rpmUrlLabel)}</span>
               <input
                 name="rpmUrl"
@@ -6797,10 +6802,6 @@ function renderDashboard(
                 spellcheck="false"
                 placeholder="https://github.com/coder/code-server/releases/download/v4.111.0/code-server-4.111.0-amd64.rpm"
               />
-            </label>
-            <label>
-              <span>${escapeHtml(codeServerCopy.shaLabel)}</span>
-              <input name="expectedSha256" spellcheck="false" />
             </label>
             <label>
               <span>${escapeHtml(codeServerCopy.targetLabel)}</span>
@@ -6882,23 +6883,6 @@ function renderDashboard(
             : job.status === "applied"
               ? "success"
               : "default"
-      })),
-      copy.noRelatedRecords
-    )}
-  </article>`;
-
-  const relatedNodeDriftPanel = `<article class="panel detail-shell">
-    <div class="section-head">
-      <div>
-        <h3>${escapeHtml(copy.relatedDriftTitle)}</h3>
-      </div>
-    </div>
-    ${renderFeedList(
-      selectedNodeDrift.map((entry) => ({
-        title: escapeHtml(`${entry.resourceKind} · ${entry.resourceKey}`),
-        meta: escapeHtml(entry.driftStatus),
-        summary: escapeHtml(entry.latestSummary ?? "-"),
-        tone: entry.driftStatus === "in_sync" ? "success" : "danger"
       })),
       copy.noRelatedRecords
     )}
@@ -8041,15 +8025,12 @@ function renderDashboard(
       recordsLabel: copy.records,
       defaultPageSize: 10
     })}
-    <div class="grid grid-node-health-focus">
+    <div class="grid grid-node-health-focus grid-node-health-focus-spaced">
       <div class="stack">
         ${nodeDiagnosticsPanel}
       </div>
       <div class="stack">
         ${codeServerUpdatePanel}
-      </div>
-      <div class="grid-span-all">
-        ${relatedNodeDriftPanel}
       </div>
     </div>
   </section>`;

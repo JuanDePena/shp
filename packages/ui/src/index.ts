@@ -273,6 +273,10 @@ function renderBaseStyleBlock(): string {
         align-items: start;
       }
 
+      .grid-node-health-focus-spaced {
+        margin-top: 1.15rem;
+      }
+
       .grid-span-all {
         grid-column: 1 / -1;
       }
@@ -293,6 +297,10 @@ function renderBaseStyleBlock(): string {
       .form-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+      }
+
+      .form-field-span-full {
+        grid-column: 1 / -1;
       }
 
       .filter-form-grid {
@@ -349,6 +357,10 @@ function renderBaseStyleBlock(): string {
         grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
         gap: 0.85rem;
         margin: 0;
+      }
+
+      .detail-grid-four {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
       }
 
       .detail-item {
@@ -601,6 +613,14 @@ function renderBaseStyleBlock(): string {
 
         .grid-span-all {
           grid-column: auto;
+        }
+
+        .form-field-span-full {
+          grid-column: auto;
+        }
+
+        .detail-grid-four {
+          grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
         }
       }
   `;

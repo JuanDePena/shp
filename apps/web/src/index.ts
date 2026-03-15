@@ -12,6 +12,7 @@ import {
   type AuthenticatedUserSummary,
   type BackupsOverview,
   type BackupRunSummary,
+  type CodeServerUpdateRequest,
   type DatabaseReconcileRequest,
   type DesiredStateAppInput,
   type DesiredStateApplyRequest,
@@ -5803,6 +5804,64 @@ function renderDashboard(
     view === "node-health"
       ? data.nodeHealth.find((node) => node.nodeId === focus) ?? data.nodeHealth[0]
       : undefined;
+  const codeServerCopy =
+    locale === "es"
+      ? {
+          title: "Code-server",
+          description:
+            "Estado del servicio operator-facing, versión instalada y actualización controlada por URL de RPM.",
+          versionLabel: "Versión code-server",
+          serviceLabel: "Servicio",
+          bindLabel: "Bind",
+          authLabel: "Auth",
+          enabledLabel: "Habilitado",
+          checkedAtLabel: "Última inspección",
+          rpmUrlLabel: "URL del RPM",
+          shaLabel: "SHA-256 esperado",
+          targetLabel: "Objetivo",
+          targetCurrent: "Nodo seleccionado",
+          targetAll: "Todos los nodos gestionados",
+          actionLabel: "Actualizar code-server",
+          historyTitle: "Histórico de actualizaciones",
+          historyDescription: "Últimos jobs reportados de code-server.update para el nodo seleccionado.",
+          versionColumn: "Code-server",
+          serviceColumn: "Servicio code-server"
+        }
+      : {
+          title: "Code-server",
+          description:
+            "Operator-facing service state, installed version and controlled updates from an RPM URL.",
+          versionLabel: "Code-server version",
+          serviceLabel: "Service",
+          bindLabel: "Bind",
+          authLabel: "Auth",
+          enabledLabel: "Enabled",
+          checkedAtLabel: "Last inspected",
+          rpmUrlLabel: "RPM URL",
+          shaLabel: "Expected SHA-256",
+          targetLabel: "Target",
+          targetCurrent: "Selected node",
+          targetAll: "All managed nodes",
+          actionLabel: "Update code-server",
+          historyTitle: "Update history",
+          historyDescription:
+            "Latest reported code-server.update jobs for the selected node.",
+          versionColumn: "Code-server",
+          serviceColumn: "Code-server service"
+        };
+  const renderCodeServerVersion = (node: NodeHealthSnapshot): string =>
+    node.codeServer?.version ? renderPill(node.codeServer.version, "muted") : "-";
+  const renderCodeServerServiceStatus = (node: NodeHealthSnapshot): string => {
+    if (!node.codeServer) {
+      return "-";
+    }
+
+    if (!node.codeServer.enabled) {
+      return renderPill("disabled", "danger");
+    }
+
+    return renderPill(node.codeServer.active ? "active" : "inactive", node.codeServer.active ? "success" : "danger");
+  };
   const nodeHealthRows: DataTableRow[] = data.nodeHealth.map((node) => ({
     cells: [
       renderFocusLink(
@@ -5813,6 +5872,8 @@ function renderDashboard(
       ),
       escapeHtml(node.hostname),
       node.currentVersion ? renderPill(node.currentVersion, "muted") : "-",
+      renderCodeServerVersion(node),
+      renderCodeServerServiceStatus(node),
       renderPill(String(node.pendingJobCount), node.pendingJobCount > 0 ? "danger" : "success"),
       node.latestJobStatus
         ? renderPill(
@@ -5831,6 +5892,8 @@ function renderDashboard(
       node.nodeId,
       node.hostname,
       node.currentVersion ?? "",
+      node.codeServer?.version ?? "",
+      node.codeServer?.active ? "active" : node.codeServer ? "inactive" : "",
       node.latestJobStatus ?? "",
       node.latestJobSummary ?? "",
       String(node.driftedResourceCount ?? 0)
@@ -6007,6 +6070,14 @@ function renderDashboard(
     : [];
   const selectedNodeJobs = selectedNodeHealth
     ? data.jobHistory.filter((job) => job.nodeId === selectedNodeHealth.nodeId).slice(0, 6)
+    : [];
+  const selectedNodeCodeServerJobs = selectedNodeHealth
+    ? data.jobHistory
+        .filter(
+          (job) =>
+            job.nodeId === selectedNodeHealth.nodeId && job.kind === "code-server.update"
+        )
+        .slice(0, 6)
     : [];
   const selectedNodeAuditEvents = selectedNodeHealth
     ? data.auditEvents
@@ -6612,6 +6683,39 @@ function renderDashboard(
               : "-"
           },
           {
+            label: codeServerCopy.versionLabel,
+            value: selectedNodeHealth.codeServer?.version
+              ? renderPill(selectedNodeHealth.codeServer.version, "muted")
+              : "-"
+          },
+          {
+            label: codeServerCopy.serviceLabel,
+            value: renderCodeServerServiceStatus(selectedNodeHealth)
+          },
+          {
+            label: codeServerCopy.bindLabel,
+            value: selectedNodeHealth.codeServer?.bindAddress
+              ? `<span class="mono">${escapeHtml(selectedNodeHealth.codeServer.bindAddress)}</span>`
+              : "-"
+          },
+          {
+            label: codeServerCopy.authLabel,
+            value: escapeHtml(selectedNodeHealth.codeServer?.authMode ?? copy.none)
+          },
+          {
+            label: codeServerCopy.enabledLabel,
+            value: renderPill(
+              selectedNodeHealth.codeServer?.enabled ? copy.yesLabel : copy.noLabel,
+              selectedNodeHealth.codeServer?.enabled ? "success" : "danger"
+            )
+          },
+          {
+            label: codeServerCopy.checkedAtLabel,
+            value: escapeHtml(
+              formatDate(selectedNodeHealth.codeServer?.checkedAt, locale)
+            )
+          },
+          {
             label: copy.nodeColPending,
             value: renderPill(
               String(selectedNodeHealth.pendingJobCount),
@@ -6644,6 +6748,116 @@ function renderDashboard(
         ])}
       </article>`
     : `<article class="panel"><p class="empty">${escapeHtml(copy.noNodes)}</p></article>`;
+
+  const codeServerUpdatePanel = selectedNodeHealth
+    ? `<article class="panel detail-shell">
+        <div class="section-head">
+          <div>
+            <h3>${escapeHtml(codeServerCopy.title)}</h3>
+            <p class="muted section-description">${escapeHtml(codeServerCopy.description)}</p>
+          </div>
+        </div>
+        ${renderActionFacts([
+          {
+            label: codeServerCopy.versionLabel,
+            value: selectedNodeHealth.codeServer?.version
+              ? renderPill(selectedNodeHealth.codeServer.version, "muted")
+              : escapeHtml(copy.none)
+          },
+          {
+            label: codeServerCopy.serviceLabel,
+            value: renderCodeServerServiceStatus(selectedNodeHealth)
+          },
+          {
+            label: codeServerCopy.bindLabel,
+            value: selectedNodeHealth.codeServer?.bindAddress
+              ? `<span class="mono">${escapeHtml(selectedNodeHealth.codeServer.bindAddress)}</span>`
+              : escapeHtml(copy.none)
+          },
+          {
+            label: codeServerCopy.authLabel,
+            value: escapeHtml(selectedNodeHealth.codeServer?.authMode ?? copy.none)
+          }
+        ])}
+        <form method="post" action="/actions/code-server-update" class="detail-shell">
+          <input
+            type="hidden"
+            name="returnTo"
+            value="${escapeHtml(
+              buildDashboardViewUrl("node-health", undefined, selectedNodeHealth.nodeId)
+            )}"
+          />
+          <div class="form-grid">
+            <label>
+              <span>${escapeHtml(codeServerCopy.rpmUrlLabel)}</span>
+              <input
+                name="rpmUrl"
+                type="url"
+                required
+                spellcheck="false"
+                placeholder="https://github.com/coder/code-server/releases/download/v4.111.0/code-server-4.111.0-amd64.rpm"
+              />
+            </label>
+            <label>
+              <span>${escapeHtml(codeServerCopy.shaLabel)}</span>
+              <input name="expectedSha256" spellcheck="false" />
+            </label>
+            <label>
+              <span>${escapeHtml(codeServerCopy.targetLabel)}</span>
+              <select name="targetScope">
+                <option value="${escapeHtml(selectedNodeHealth.nodeId)}">${escapeHtml(
+                  `${codeServerCopy.targetCurrent}: ${selectedNodeHealth.nodeId}`
+                )}</option>
+                <option value="__all__">${escapeHtml(codeServerCopy.targetAll)}</option>
+              </select>
+            </label>
+          </div>
+          <button
+            type="submit"
+            data-confirm="${escapeHtml(
+              locale === "es"
+                ? "¿Despachar actualización de code-server con este RPM?"
+                : "Queue a code-server update using this RPM?"
+            )}"
+          >${escapeHtml(codeServerCopy.actionLabel)}</button>
+        </form>
+      </article>`
+    : `<article class="panel"><p class="empty">${escapeHtml(copy.noNodes)}</p></article>`;
+
+  const codeServerHistoryPanel = `<article class="panel detail-shell">
+    <div class="section-head">
+      <div>
+        <h3>${escapeHtml(codeServerCopy.historyTitle)}</h3>
+        <p class="muted section-description">${escapeHtml(codeServerCopy.historyDescription)}</p>
+      </div>
+      ${selectedNodeHealth ? `<a class="button-link secondary" href="${escapeHtml(
+        buildDashboardViewUrl("job-history", undefined, undefined, {
+          jobKind: "code-server.update",
+          jobNode: selectedNodeHealth.nodeId
+        })
+      )}">${escapeHtml(copy.openJobHistory)}</a>` : ""}
+    </div>
+    ${renderFeedList(
+      selectedNodeCodeServerJobs.map((job) => ({
+        title: escapeHtml(job.summary ?? job.kind),
+        meta: escapeHtml(
+          [
+            job.jobId,
+            job.status ?? "queued",
+            formatDate(job.completedAt ?? job.createdAt, locale)
+          ].join(" · ")
+        ),
+        summary: escapeHtml(String(job.payload.rpmUrl ?? copy.none)),
+        tone:
+          job.status === "failed"
+            ? "danger"
+            : job.status === "applied"
+              ? "success"
+              : "default"
+      })),
+      copy.noRelatedRecords
+    )}
+  </article>`;
 
   const relatedNodeJobsPanel = `<article class="panel detail-shell">
     <div class="section-head">
@@ -7811,6 +8025,8 @@ function renderDashboard(
         { label: copy.nodeColNode, className: "mono" },
         { label: copy.nodeColHostname },
         { label: copy.nodeColVersion },
+        { label: codeServerCopy.versionColumn },
+        { label: codeServerCopy.serviceColumn },
         { label: copy.nodeColPending },
         { label: copy.nodeColLatestStatus },
         { label: copy.nodeColLatestSummary },
@@ -7826,9 +8042,13 @@ function renderDashboard(
       defaultPageSize: 10
     })}
     <div class="grid grid-two">
-      ${nodeDiagnosticsPanel}
+      <div class="stack">
+        ${nodeDiagnosticsPanel}
+        ${codeServerUpdatePanel}
+      </div>
       <div class="stack">
         ${relatedNodeJobsPanel}
+        ${codeServerHistoryPanel}
         ${relatedNodeDriftPanel}
         ${renderAuditPanel(
           copy,
@@ -8091,6 +8311,17 @@ function getNoticeFromUrl(url: URL): PanelNotice | undefined {
 
 function noticeLocation(message: string, kind: PanelNotice["kind"] = "success"): string {
   const url = new URL("http://localhost/");
+  url.searchParams.set("notice", message);
+  url.searchParams.set("kind", kind);
+  return `${url.pathname}${url.search}`;
+}
+
+function noticeReturnTo(
+  returnTo: string,
+  message: string,
+  kind: PanelNotice["kind"] = "success"
+): string {
+  const url = new URL(sanitizeReturnTo(returnTo), "http://localhost");
   url.searchParams.set("notice", message);
   url.searchParams.set("kind", kind);
   return `${url.pathname}${url.search}`;
@@ -8538,6 +8769,39 @@ async function requestHandler(
       response,
       noticeLocation(
         `Queued ${result.jobs.length} database reconcile job(s) for ${appSlug}.`,
+        "success"
+      )
+    );
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/actions/code-server-update") {
+    const token = await requireSessionToken(request);
+    const form = await readFormBody(request);
+    const rpmUrl = form.get("rpmUrl")?.trim() ?? "";
+    const expectedSha256 = form.get("expectedSha256")?.trim() || undefined;
+    const targetScope = form.get("targetScope")?.trim() ?? "";
+    const returnTo = form.get("returnTo") ?? "/";
+    const requestBody: CodeServerUpdateRequest = {
+      rpmUrl,
+      expectedSha256
+    };
+
+    if (targetScope && targetScope !== "__all__") {
+      requestBody.nodeIds = [targetScope];
+    }
+
+    const result = await apiRequest<JobDispatchResponse>("/v1/code-server/update", {
+      method: "POST",
+      token,
+      body: requestBody
+    });
+
+    redirect(
+      response,
+      noticeReturnTo(
+        returnTo,
+        `Queued ${result.jobs.length} code-server update job(s).`,
         "success"
       )
     );

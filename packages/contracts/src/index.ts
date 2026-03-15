@@ -22,6 +22,7 @@ export const dispatchedJobKinds = [
   "container.reconcile",
   "postgres.reconcile",
   "mariadb.reconcile",
+  "code-server.update",
   "backup.trigger",
   "mail.sync"
 ] as const;
@@ -65,6 +66,26 @@ export interface MariadbReconcilePayload {
   password: string;
 }
 
+export interface CodeServerUpdatePayload {
+  rpmUrl: string;
+  expectedSha256?: string;
+}
+
+export interface CodeServerServiceSnapshot {
+  serviceName: string;
+  enabled: boolean;
+  active: boolean;
+  version?: string;
+  bindAddress?: string;
+  authMode?: string;
+  settingsProfileHash?: string;
+  checkedAt: string;
+}
+
+export interface NodeRuntimeSnapshot {
+  codeServer?: CodeServerServiceSnapshot;
+}
+
 export interface PanelHealthSnapshot {
   service: PanelServiceName;
   status: PanelHealthStatus;
@@ -104,6 +125,7 @@ export interface NodeRegistrationRequest {
   version: string;
   supportedJobKinds: DispatchedJobKind[];
   generatedAt: string;
+  runtimeSnapshot?: NodeRuntimeSnapshot;
 }
 
 export interface NodeRegistrationResponse {
@@ -118,6 +140,7 @@ export interface JobClaimRequest {
   hostname: string;
   version: string;
   maxJobs: number;
+  runtimeSnapshot?: NodeRuntimeSnapshot;
 }
 
 export interface JobClaimResponse {
@@ -260,6 +283,12 @@ export interface DatabaseReconcileRequest {
   password?: string;
 }
 
+export interface CodeServerUpdateRequest {
+  rpmUrl: string;
+  expectedSha256?: string;
+  nodeIds?: string[];
+}
+
 export interface JobDispatchResponse {
   desiredStateVersion: string;
   jobs: DispatchedJobEnvelope[];
@@ -395,6 +424,7 @@ export interface NodeHealthSnapshot {
   primaryZoneCount?: number;
   primaryAppCount?: number;
   backupPolicyCount?: number;
+  codeServer?: CodeServerServiceSnapshot;
 }
 
 export interface JobHistoryEntry {

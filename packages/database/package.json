@@ -1,6 +1,6 @@
 {
   "name": "@simplehost/panel-database",
-  "version": "2603.14.20",
+  "version": "2603.15.00",
   "private": true,
   "type": "module",
   "main": "dist/index.js",

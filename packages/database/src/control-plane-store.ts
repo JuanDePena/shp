@@ -14,6 +14,9 @@ import {
   type BackupRunRecordRequest,
   type BackupRunSummary,
   type BackupsOverview,
+  type CodeServerServiceSnapshot,
+  type CodeServerUpdatePayload,
+  type CodeServerUpdateRequest,
   createDispatchedJobEnvelope,
   type DesiredStateApplyRequest,
   type DesiredStateApplyResponse,
@@ -85,6 +88,7 @@ interface NodeRow {
   supported_job_kinds: unknown;
   accepted_at: Date | string;
   last_seen_at: Date | string;
+  runtime_snapshot?: Record<string, unknown> | null;
 }
 
 interface JobRow {
@@ -297,6 +301,7 @@ interface NodeHealthRow {
   primary_zone_count: number;
   primary_app_count: number;
   backup_policy_count: number;
+  runtime_snapshot?: Record<string, unknown> | null;
 }
 
 interface AuditEventRow {
@@ -376,6 +381,10 @@ export interface PanelControlPlaneStore {
   dispatchDatabaseReconcile(
     appSlug: string,
     request: DatabaseReconcileRequest,
+    presentedToken: string | null
+  ): Promise<JobDispatchResponse>;
+  dispatchCodeServerUpdate(
+    request: CodeServerUpdateRequest,
     presentedToken: string | null
   ): Promise<JobDispatchResponse>;
   runReconciliationCycle(presentedToken?: string | null): Promise<ReconciliationRunSummary>;
@@ -709,7 +718,40 @@ function toReconciliationRunSummary(
   };
 }
 
+function normalizeCodeServerSnapshot(
+  value: unknown
+): CodeServerServiceSnapshot | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  if (typeof record.serviceName !== "string") {
+    return undefined;
+  }
+
+  return {
+    serviceName: record.serviceName,
+    enabled: Boolean(record.enabled),
+    active: Boolean(record.active),
+    version: typeof record.version === "string" ? record.version : undefined,
+    bindAddress: typeof record.bindAddress === "string" ? record.bindAddress : undefined,
+    authMode: typeof record.authMode === "string" ? record.authMode : undefined,
+    settingsProfileHash:
+      typeof record.settingsProfileHash === "string"
+        ? record.settingsProfileHash
+        : undefined,
+    checkedAt: typeof record.checkedAt === "string" ? record.checkedAt : new Date(0).toISOString()
+  };
+}
+
 function toNodeHealthSnapshot(row: NodeHealthRow): NodeHealthSnapshot {
+  const runtimeSnapshot =
+    row.runtime_snapshot && typeof row.runtime_snapshot === "object"
+      ? row.runtime_snapshot
+      : {};
+
   return {
     nodeId: row.node_id,
     hostname: row.hostname,
@@ -723,7 +765,10 @@ function toNodeHealthSnapshot(row: NodeHealthRow): NodeHealthSnapshot {
     driftedResourceCount: Number(row.drifted_resource_count ?? 0),
     primaryZoneCount: Number(row.primary_zone_count ?? 0),
     primaryAppCount: Number(row.primary_app_count ?? 0),
-    backupPolicyCount: Number(row.backup_policy_count ?? 0)
+    backupPolicyCount: Number(row.backup_policy_count ?? 0),
+    codeServer: normalizeCodeServerSnapshot(
+      (runtimeSnapshot as Record<string, unknown>).codeServer
+    )
   };
 }
 
@@ -2804,21 +2849,24 @@ export async function createPostgresControlPlaneStore(
              hostname,
              version,
              supported_job_kinds,
+             runtime_snapshot,
              accepted_at,
              last_seen_at
            )
-           VALUES ($1, $2, $3, $4::jsonb, $5, $5)
+           VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $6)
            ON CONFLICT (node_id)
            DO UPDATE SET
              hostname = EXCLUDED.hostname,
              version = EXCLUDED.version,
              supported_job_kinds = EXCLUDED.supported_job_kinds,
+             runtime_snapshot = EXCLUDED.runtime_snapshot,
              last_seen_at = EXCLUDED.last_seen_at`,
           [
             request.nodeId,
             request.hostname,
             request.version,
             JSON.stringify(request.supportedJobKinds),
+            JSON.stringify(request.runtimeSnapshot ?? {}),
             acceptedAt
           ]
         );
@@ -2861,9 +2909,16 @@ export async function createPostgresControlPlaneStore(
           `UPDATE control_plane_nodes
            SET hostname = $2,
                version = $3,
-               last_seen_at = $4
+               runtime_snapshot = $4::jsonb,
+               last_seen_at = $5
            WHERE node_id = $1`,
-          [request.nodeId, request.hostname, request.version, claimedAt]
+          [
+            request.nodeId,
+            request.hostname,
+            request.version,
+            JSON.stringify(request.runtimeSnapshot ?? {}),
+            claimedAt
+          ]
         );
 
         const result = await client.query<JobRow>(
@@ -2935,6 +2990,30 @@ export async function createPostgresControlPlaneStore(
            WHERE node_id = $1`,
           [request.nodeId, reportedAt]
         );
+
+        if (
+          request.result.kind === "code-server.update" &&
+          request.result.details &&
+          typeof request.result.details === "object" &&
+          !Array.isArray(request.result.details) &&
+          "after" in request.result.details
+        ) {
+          const afterSnapshot = (request.result.details as Record<string, unknown>).after;
+
+          if (afterSnapshot && typeof afterSnapshot === "object" && !Array.isArray(afterSnapshot)) {
+            await client.query(
+              `UPDATE control_plane_nodes
+               SET runtime_snapshot = jsonb_set(
+                     COALESCE(runtime_snapshot, '{}'::jsonb),
+                     '{codeServer}',
+                     $2::jsonb,
+                     true
+                   )
+               WHERE node_id = $1`,
+              [request.nodeId, JSON.stringify(afterSnapshot)]
+            );
+          }
+        }
 
         const jobResult = await client.query<JobRow>(
           `SELECT
@@ -3462,6 +3541,96 @@ export async function createPostgresControlPlaneStore(
       });
     },
 
+    async dispatchCodeServerUpdate(request, presentedToken) {
+      return withTransaction(pool, async (client) => {
+        const actor = await requireAuthorizedUser(client, presentedToken, [
+          "platform_admin",
+          "platform_operator"
+        ]);
+        const rpmUrl = request.rpmUrl.trim();
+
+        if (!/^https?:\/\//i.test(rpmUrl)) {
+          throw new Error("code-server RPM URL must be an absolute http(s) URL.");
+        }
+
+        const desiredStateVersion = createDesiredStateVersion();
+        const requestedNodeIds = Array.from(
+          new Set((request.nodeIds ?? []).map((value) => value.trim()).filter(Boolean))
+        );
+        const nodeResult = requestedNodeIds.length > 0
+          ? await client.query<{ node_id: string }>(
+              `SELECT node_id
+               FROM shp_nodes
+               WHERE node_id = ANY($1::text[])
+               ORDER BY node_id ASC`,
+              [requestedNodeIds]
+            )
+          : await client.query<{ node_id: string }>(
+              `SELECT node_id
+               FROM shp_nodes
+               ORDER BY node_id ASC`
+            );
+        const targetNodeIds = nodeResult.rows.map((row) => row.node_id);
+
+        if (requestedNodeIds.length > 0 && targetNodeIds.length !== requestedNodeIds.length) {
+          const missingNodeIds = requestedNodeIds.filter(
+            (nodeId) => !targetNodeIds.includes(nodeId)
+          );
+          throw new Error(
+            `Unknown target node(s): ${missingNodeIds.join(", ")}.`
+          );
+        }
+
+        if (targetNodeIds.length === 0) {
+          throw new Error("No managed nodes are available for code-server updates.");
+        }
+
+        const jobs = targetNodeIds.map((nodeId) =>
+          createQueuedDispatchJob(
+            createDispatchedJobEnvelope(
+              "code-server.update",
+              nodeId,
+              desiredStateVersion,
+              {
+                rpmUrl,
+                expectedSha256: request.expectedSha256
+              } satisfies CodeServerUpdatePayload
+            ),
+            `node:${nodeId}:code-server`,
+            "service"
+          )
+        );
+
+        await insertDispatchedJobs(
+          client,
+          jobs,
+          actor.userId,
+          `code-server.update:${requestedNodeIds.length > 0 ? requestedNodeIds.join(",") : "all"}`,
+          jobPayloadKey
+        );
+
+        await insertAuditEvent(client, {
+          actorType: "user",
+          actorId: actor.userId,
+          eventType: "code_server.update.requested",
+          entityType: "service",
+          entityId: "code-server",
+          payload: {
+            nodeIds: targetNodeIds,
+            rpmUrl
+          }
+        });
+
+        return {
+          desiredStateVersion,
+          jobs: jobs.map((job) => ({
+            ...job.envelope,
+            payload: sanitizePayload(job.envelope.payload) as Record<string, unknown>
+          }))
+        };
+      });
+    },
+
     async runReconciliationCycle(presentedToken) {
       const startedAt = new Date().toISOString();
       const desiredStateVersion = createDesiredStateVersion();
@@ -3680,6 +3849,7 @@ export async function createPostgresControlPlaneStore(
              nodes.node_id,
              nodes.hostname,
              control.version AS current_version,
+             control.runtime_snapshot,
              control.last_seen_at,
              COALESCE(pending.pending_job_count, 0) AS pending_job_count,
              0 AS drifted_resource_count,

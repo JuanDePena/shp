@@ -7,6 +7,7 @@ import {
   type AppReconcileRequest,
   type AuthLoginRequest,
   type BackupRunRecordRequest,
+  type CodeServerUpdateRequest,
   type CreateUserRequest,
   type DesiredStateApplyRequest,
   type DatabaseReconcileRequest,
@@ -266,6 +267,18 @@ async function requestHandler(
       201,
       await controlPlaneStore.recordBackupRun(
         await readJsonBody<BackupRunRecordRequest>(request),
+        readBearerToken(request)
+      )
+    );
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/code-server/update") {
+    writeJson(
+      response,
+      200,
+      await controlPlaneStore.dispatchCodeServerUpdate(
+        await readJsonBody<CodeServerUpdateRequest>(request),
         readBearerToken(request)
       )
     );
